@@ -102,8 +102,8 @@ SKILL_SCRIPTS="$SKILL/scripts"
 EXPLORER_SCRIPTS="$SKILL/explorer/scripts"
 for script in \
   "$SKILL_SCRIPTS/ca_instr_analysis.py" \
-  "$SKILL_SCRIPTS/cce_vmi_breakdown.py" \
   "$SKILL_SCRIPTS/cce_vmi_ca_report.py" \
+  "$SCRIPT_DIR/scripts/cce_vmi_breakdown.py" \
   "$DASH/scripts/build_data.py"
 do
   if [[ ! -f "$script" ]]; then
