@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A6 · dav_9201 — CCE vs VMI/DSL · CA Instruction &amp; IPC Dashboard</title>
+<link rel="stylesheet" href="styles.css?v=20260916172359">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <img class="logo" src="favicon.svg?v=1" alt="">
+    <div>
+      <h1><span class="arch-badge">A6 · dav_9201</span>CCE vs VMI/DSL · CA Instruction &amp; IPC Dashboard</h1>
+      <p class="subtitle">Executed-instruction comparison across <span id="hdr-matched">—</span> matched CCE ↔ VMI/DSL kernel pairs · instruction counts, IPC, stalls &amp; critical-path latency · VMI/DSL kernels live under <code>dsl/</code> in pto-vmi</p>
+      <p class="subtitle" id="data-freshness" style="font-size:11px;color:var(--muted)">checking data freshness…</p>
+    </div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-view="overview">Verdict</button>
+    <button class="tab" data-view="pairs">Matched Pairs</button>
+    <button class="tab" data-view="scatter">Performance</button>
+    <button class="tab" data-view="criticalpath">Cost Model</button>
+    <button class="tab" data-view="explorer">Kernel Lab</button>
+    <button class="tab" data-view="versions">Versions</button>
+    <button class="tab" data-view="coverage">Feature Coverage</button>
+    <button class="tab" data-view="summary">Diagnosis</button>
+  </nav>
+  <div class="version-bar">
+    <label class="ver-lbl">pto-as version:</label>
+    <select id="ver-select"></select>
+    <span id="ver-info" class="muted small"></span>
+    <span id="run-pill" class="run-pill" hidden></span>
+  </div>
+</header>
+
+<main id="view"></main>
+
+<footer class="footer">
+  <span>Data: <code>cce_vmi_ca_report.json</code> (real-shape) · <span id="ft-cce-cases">—</span> CCE cases / <span id="ft-matched">—</span> matched pairs / <span id="ft-cceonly">—</span> CCE-only / <span id="ft-excluded">—</span> excluded · pto-vmi <code id="ft-commit">—</code> · <span id="ft-ptoas">—</span> / <span id="ft-cann">—</span> · IPC = total_rvec_executed/vf_compute_span (max 2.0) · offline build, no external deps · <a href="#" id="ft-report-link">raw report ↗</a></span>
+</footer>
+
+<template id="tpl-overview">
+  <section class="view-section">
+    <div class="card ov-verdict">
+      <h2>Bottom line</h2>
+      <p class="lead" id="bottom-line"></p>
+      <p class="muted" id="net-conclusion"></p>
+      <div class="ov-cta">
+        <button class="ov-cta-btn primary" data-jump="summary">Why? → Diagnosis</button>
+        <button class="ov-cta-btn" data-jump="pairs">Browse kernels → Matched Pairs</button>
+        <button class="ov-cta-btn" data-jump="explorer">Dig into one kernel → Kernel Lab</button>
+      </div>
+    </div>
+    <div class="kpi-grid" id="kpi-grid"></div>
+    <div class="card">
+      <h2>Unit → category mapping</h2>
+      <div class="table-wrap"><table class="data-table compact" id="unit-map-table"></table></div>
+    </div>
+    <div class="card">
+      <h2>Definitions</h2>
+      <dl class="defs" id="defs-list"></dl>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-summary">
+  <section class="view-section">
+    <div class="card ov-verdict">
+      <h2>A7 · Diagnostic conclusion <span class="muted small">— read this first</span></h2>
+      <div class="table-wrap"><table class="data-table" id="a7-table"></table></div>
+    </div>
+    <div class="card">
+      <h2>A1 · Who has the problem — aggregate tally</h2>
+      <p class="muted">Across <span id="sum-matched-count">—</span> matched kernel pairs. CCE worse vs VMI worse/tie per dimension.</p>
+      <div class="table-wrap"><table class="data-table" id="a1-table"></table></div>
+      <div id="a1-chart"></div>
+    </div>
+    <div class="card">
+      <h2>A2 · VMI EX explosion — missing fused ops (ΔEX ≥ 4)</h2>
+      <p class="muted"><span id="a2-count">0</span> pairs where VMI emits ≥4 more EX instructions than CCE. Root cause: VMI MLIR lowering lacks fused ops.</p>
+      <div class="table-wrap"><table class="data-table" id="a2-table"></table></div>
+    </div>
+    <div class="card">
+      <h2>A3 · CCE EX explosion — tile-unrolling / manual deintlv (ΔEX ≥ 3)</h2>
+      <p class="muted">CCE manually unrolls per-tile or manually deinterleaves in EX; VMI uses high-level abstractions.</p>
+      <div class="table-wrap"><table class="data-table" id="a3-table"></table></div>
+    </div>
+    <div class="card">
+      <h2>A4 · vf_real gap — where one side is much slower (|Δ| ≥ 30 cycles)</h2>
+      <div class="table-wrap"><table class="data-table" id="a4-table"></table></div>
+    </div>
+    <div class="card">
+      <h2>A5 · Predicate instruction differences</h2>
+      <div class="table-wrap"><table class="data-table" id="a5-table"></table></div>
+    </div>
+    <div class="card">
+      <h2>A6 · Stall-source difference — <span id="a6-headline">CCE ? vs VMI ?</span></h2>
+      <p class="muted" id="a6-note"></p>
+      <p class="lead"><strong>CCE root:</strong> <span id="a6-cce"></span></p>
+      <p class="lead"><strong>VMI root:</strong> <span id="a6-vmi"></span></p>
+      <p class="muted" id="a6-store"></p>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-pairs">
+  <section class="view-section">
+    <div class="sub-tabs">
+      <button class="sub-tab active" data-sub="matched">Matched <span id="pairs-seg-matched" class="muted small"></span></button>
+      <button class="sub-tab" data-sub="excluded">Excluded <span id="pairs-seg-excluded" class="muted small"></span></button>
+      <button class="sub-tab" data-sub="cceonly">CCE-only <span id="pairs-seg-cceonly" class="muted small"></span></button>
+    </div>
+    <div class="sub-panel active" data-sub="matched">
+      <div class="card">
+        <h2>Matched pairs — CCE vs VMI side-by-side <span class="count" id="pairs-count"></span></h2>
+        <div class="toolbar">
+          <input type="search" id="pairs-search" placeholder="Filter by kernel / case_id…">
+          <label class="select-label">Sort:
+            <select id="pairs-sort">
+              <option value="dex_desc">ΔEX (VMI more first)</option>
+              <option value="dex_asc">ΔEX (CCE more first)</option>
+              <option value="dvf_desc">|Δvf_real| (largest first)</option>
+              <option value="exipc_ratio_desc">EX-IPC ratio (VMI/CCE, high first)</option>
+              <option value="kernel">Kernel name (A→Z)</option>
+              <option value="vfreal_desc">vf_real (slowest first)</option>
+            </select>
+          </label>
+          <label class="select-label">Metric columns:
+            <select id="pairs-metric">
+              <option value="counts">Instruction counts (EX/SU/pred/LD/ST/SCAL/MTE2)</option>
+              <option value="ipc">IPC &amp; vf_real</option>
+              <option value="stalls">Stalls &amp; dual-issue</option>
+            </select>
+          </label>
+        </div>
+        <div class="table-wrap"><table class="data-table pair-table" id="pairs-table"></table></div>
+        <p class="muted small">Δ = VMI − CCE (positive ⇒ VMI emits more; negative ⇒ CCE emits more). <span class="legend-dot cce"></span>CCE <span class="legend-dot vmi"></span>VMI</p>
+      </div>
+    </div>
+    <div class="sub-panel" data-sub="excluded">
+      <div class="card">
+        <h2>Excluded pairs — not valid matches</h2>
+        <p class="muted">These CCE↔VMI pairs are dropped from every other view (scatter plots, exec summary, outliers, theory, critical path comparison) because their numbers are not trustworthy: <em>correctness failure</em> (CCE or VMI test didn't pass), a <em>toolchain bug</em> (ptoas/simulator lowering), or <em>semantic divergence</em> (different inputs / golden outputs). Click a row for detail.</p>
+        <div class="table-wrap"><table class="data-table" id="excluded-table"></table></div>
+      </div>
+    </div>
+    <div class="sub-panel" data-sub="cceonly">
+      <div class="card">
+        <h2>CCE-only cases — no VMI/DSL counterpart <span class="count" id="cceonly-count"></span></h2>
+        <p class="muted">CCE kernels with no matching VMI implementation, or whose VMI counterpart has no CA sim data. Candidates for VMI porting.</p>
+        <div class="toolbar">
+          <input type="search" id="cceonly-search" placeholder="Filter by kernel…">
+        </div>
+        <div class="table-wrap"><table class="data-table" id="cceonly-table"></table></div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-scatter">
+  <section class="view-section">
+    <div class="sub-tabs">
+      <button class="sub-tab active" data-sub="scatter">Metrics</button>
+      <button class="sub-tab" data-sub="breakdown">Breakdown</button>
+    </div>
+    <div class="sub-panel active" data-sub="scatter">
+    <div class="card" style="margin-bottom:14px">
+      <p class="muted">CCE (bisheng, physical MI) vs <strong>VMI</strong> (ptoas, logical ISA) head-to-head across every matched kernel pair — each point is a kernel, the diagonal is parity. VMI is the new surface under evaluation; CCE is the reference baseline it is measured against.</p>
+    </div>
+    <div class="perf-grid">
+      <!-- Primary metrics (left column) -->
+      <div class="card">
+        <h3>① vf_real — wall-clock cycles (lower = faster)</h3>
+        <p class="muted small">The bottom line: which side is actually faster. Below diagonal ⇒ VMI faster.</p>
+        <div id="scatter-vfreal" class="chart perf-chart"></div>
+      </div>
+      <div class="card">
+        <h3>② IPC — overall throughput (higher = better)</h3>
+        <p class="muted small">Total RVEC instructions / vf_compute_span. Above diagonal ⇒ VMI better.</p>
+        <div id="scatter-ipc" class="chart perf-chart"></div>
+      </div>
+      <div class="card">
+        <h3>③ EX count — vector compute instructions</h3>
+        <p class="muted small">Below diagonal ⇒ VMI uses fewer EX ops. Above ⇒ CCE uses fewer.</p>
+        <div id="scatter-ex" class="chart perf-chart"></div>
+      </div>
+      <details class="advanced-metrics" id="advanced-metrics">
+        <summary>⚙ More metrics — EX-IPC · LD/ST IPC · EXU IPC · predicate · dual-issue · wIPC</summary>
+        <div class="perf-grid advanced-metrics-grid">
+      <div class="card">
+        <h3>④ EX-IPC — compute throughput (can exceed 1.0)</h3>
+        <p class="muted small">EX / ex_span. Reflects dual-issue efficiency.</p>
+        <div id="scatter-exipc" class="chart perf-chart"></div>
+      </div>
+      <div class="card">
+        <h3>⑤ LD/ST IPC — memory pipe throughput</h3>
+        <p class="muted small">(LD+ST) / vf_compute_span. Load/store issue rate.</p>
+        <div id="scatter-ldst" class="chart perf-chart"></div>
+      </div>
+      <div class="card">
+        <h3>⑥ EXU IPC — compute issue rate</h3>
+        <p class="muted small">EX / vf_compute_span. Includes dual-issue effect.</p>
+        <div id="scatter-exu" class="chart perf-chart"></div>
+      </div>
+      <div class="card">
+        <h3>⑦ Predicate IPC — predicate instruction density</h3>
+        <p class="muted small">PSET/PLT/PAND etc / vf_compute_span. Usually low (sparse ops). LICM-hoisted outliers excluded.</p>
+        <div id="scatter-pred" class="chart perf-chart"></div>
+      </div>
+      <div class="card">
+        <h3>⑧ Dual-Issue Rate — rvec_dual / vf_compute</h3>
+        <p class="muted small">Fraction of VF cycles with dual-issued ops (2+ instructions per cycle). Higher = better compiler scheduling (independent ops interleaved). Max 1.0.</p>
+        <div id="scatter-ci" class="chart perf-chart"></div>
+      </div>
+      <div class="card perf-wide">
+        <h3>⑨ Peek IPC (wIPC) + UB Bandwidth — per kernel</h3>
+        <p class="muted small">Peak issue rate in a 20-cycle sliding window. EX wIPC max ~2.0 (dual-issue). UB BW = (LD+ST)×256B / vf_span. Sort and filter to compare CCE vs VMI.</p>
+        <div class="toolbar">
+          <select id="wipc-sort">
+            <option value="ex_desc">EX wIPC (high→low)</option>
+            <option value="ldst_desc">LD/ST wIPC (high→low)</option>
+            <option value="su_desc">SU wIPC (high→low)</option>
+            <option value="ubbw_desc">UB BW (high→low)</option>
+            <option value="all_desc">All wIPC (high→low)</option>
+            <option value="kernel">Kernel (A→Z)</option>
+          </select>
+          <select id="wipc-filter-side" style="margin-left:8px">
+            <option value="all">Both CCE + VMI</option>
+            <option value="cce">CCE only</option>
+            <option value="vmi">VMI only</option>
+          </select>
+          <label class="select-label" style="margin-left:8px">Mix:
+            <select id="wipc-mix">
+              <option value="bottleneck">Bottleneck (auto)</option>
+              <option value="ex">EX mix</option>
+              <option value="ldst">LD/ST mix</option>
+              <option value="su">SU mix</option>
+            </select>
+          </label>
+          <input type="search" id="wipc-search" placeholder="Filter by kernel…" style="margin-left:8px;width:120px;font-size:11px">
+        </div>
+        <div id="wipc-chart" class="chart"></div>
+      </div>
+        </div>
+      </details>
+    </div>
+    </div>
+    <div class="sub-panel" data-sub="breakdown">
+      <div class="card breakdown-headline-card">
+        <div id="breakdown-headline" class="breakdown-headline">Loading summary…</div>
+      </div>
+
+      <div class="card">
+        <h2>① Instruction delta by family — where VMI emits more/fewer</h2>
+        <p class="muted">Δ = VMI − CCE total vector-compute (EX) instructions across all matched pairs, by instruction family. Green = VMI emits more, red = VMI emits fewer.</p>
+        <div id="subcats-chart" class="chart"></div>
+        <details class="detail-toggle">
+          <summary>Per-kernel instruction detail <span class="count" id="subcats-count"></span></summary>
+          <div class="toolbar">
+            <input type="search" id="subcats-search" placeholder="Filter by kernel…">
+            <label class="select-label">Columns:
+              <select id="subcats-cols">
+                <option value="deltas">Δ only</option>
+                <option value="full">CCE · VMI · Δ</option>
+              </select>
+            </label>
+            <label class="select-label">Sort by:
+              <select id="subcats-highlight">
+                <option value="arith">arith</option>
+                <option value="cast">cast</option>
+                <option value="broadcast">broadcast</option>
+                <option value="pred_setup">pred_setup</option>
+                <option value="interleave">interleave</option>
+                <option value="select_cmp">select_cmp</option>
+                <option value="reduce">reduce</option>
+              </select>
+            </label>
+          </div>
+          <div class="table-wrap"><table class="data-table" id="subcats-table"></table></div>
+        </details>
+      </div>
+
+      <div class="card">
+        <h2>② Stalls — where each side loses time</h2>
+        <div class="stall-grid">
+          <div>
+            <h3>Memory wait (MTE2)</h3>
+            <p class="muted small">Who waits longer on the GM → UB data move (Δ = VMI − CCE cycles). Blue (left) = CCE waits longer, orange (right) = VMI.</p>
+            <div id="mte2-chart" class="chart"></div>
+          </div>
+          <div>
+            <h3>Dependency wait</h3>
+            <p class="muted small">Aggregated RVEC stalls — instructions that wait longest on a dependency.</p>
+            <div id="latency-chart" class="chart"></div>
+          </div>
+        </div>
+        <details class="detail-toggle">
+          <summary>Per-kernel pipeline detail <span class="count" id="pipe-count"></span></summary>
+          <div class="toolbar">
+            <input type="search" id="pipe-search" placeholder="Filter by kernel…">
+            <label class="select-label">Verdict filter:
+              <select id="pipe-verdict">
+                <option value="all">All</option>
+                <option value="VMI hotter">VMI hotter</option>
+                <option value="CCE hotter">CCE hotter</option>
+                <option value="similar">similar</option>
+                <option value="other">other / n/a</option>
+              </select>
+            </label>
+          </div>
+          <div class="table-wrap"><table class="data-table" id="pipe-table"></table></div>
+        </details>
+      </div>
+
+      <details class="detail-toggle card">
+        <summary>③ Outliers (CCE)</summary>
+        <div class="table-wrap"><table class="data-table" id="outliers-table"></table></div>
+      </details>
+    </div>
+  </section>
+</template>
+
+
+
+
+<template id="tpl-coverage">
+  <section class="view-section">
+    <div class="card">
+      <div class="cov-head">
+        <h2>Feature Coverage — VMI Feature Taxonomy <span class="count" id="cov-kernel-count"></span> <span class="cov-version-badge" id="cov-version-badge"></span></h2>
+        <details class="cov-about"><summary>what is this?</summary>
+          <p class="muted small cov-intro">6 VMI new-features (§1–§6) — the capabilities <strong>VMI (ptoas, the logical ISA)</strong> adds over physical MI — parsed live from <code>docs/pto_vmi_features.md</code>. Click a feature card (or a sub-category) to filter the reverse index and inspect it. <span class="cov-legend-warn">⚠</span> = a sub-category has no demo kernel.</p>
+        </details>
+      </div>
+
+      <div id="cov-health" class="cov-health"></div>
+
+      <div id="cov-active" class="cov-active"></div>
+
+      <div id="cov-kpis" class="cov-kpis"></div>
+
+      <div class="cov-main">
+        <div id="cov-feature-detail" class="cov-detail"></div>
+        <div class="cov-index">
+          <h3>Kernel reverse index <span class="muted small" id="cov-index-count"></span></h3>
+          <div class="cov-index-toolbar">
+            <input type="search" id="cov-index-search" placeholder="filter kernels…">
+            <select id="cov-index-sort">
+              <option value="coverage">coverage · fewest first</option>
+              <option value="coverage-desc">coverage · most first</option>
+              <option value="alpha">alphabetical</option>
+            </select>
+          </div>
+          <div class="table-wrap"><table class="data-table" id="cov-table"></table></div>
+        </div>
+      </div>
+
+      <div class="cov-footer" id="cov-gaps"></div>
+
+      <details class="cov-advanced">
+        <summary>Advanced · full category × kernel matrix <span class="muted small">(hover a cell for evidence; click to inspect + filter)</span></summary>
+        <div id="cov-matrix" class="cov-matrix"></div>
+      </details>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-criticalpath">
+  <section class="view-section">
+    <div class="sub-tabs">
+      <button class="sub-tab active" data-sub="criticalpath">Critical Path</button>
+      <button class="sub-tab" data-sub="roofline">Roofline</button>
+    </div>
+    <div class="sub-panel active" data-sub="criticalpath">
+    <div class="card">
+      <h2>Critical Path <span class="count" id="cp-count"></span></h2>
+      <p class="muted">The <strong>critical path</strong> per kernel: the longest RAW-dependency chain of vector intrinsics, parsed mechanically from each kernel's <code>__VEC_SCOPE__</code> loop body (in the CCE source) and priced with its A5 sub-unit latency (<code>instruction-families.md</code>). <strong>critical path</strong> = Σ latency along the longest dependency chain; <strong>verdict</strong> = <em>latency-bound</em> when it exceeds the theory throughput floor, else <em>throughput-bound</em>. A wide gap vs actual <code>vf_real</code> means the OOO engine hides the dependency latency across loop iterations. Click a row for the instruction → latency breakdown.</p>
+      <div class="cp-kpi-grid" id="cp-kpi"></div>
+    </div>
+    <div class="card">
+      <h3>Dependency DAG — full graph with critical path</h3>
+      <p class="muted small">The complete register-dependency graph of one loop iteration, built from the kernel's <code>__VEC_SCOPE__</code> loop body (CCE source, dtype-resolved). Nodes are vector intrinsics colored by sub-unit (latency in the badge); arrows are RAW dependencies — parallel loads/convert <strong>diverge</strong>, then merge at the reduce/broadcast chain. The <strong style="color:var(--warn)">amber nodes + arrows</strong> are the most critical path (longest latency chain). Pick a kernel to inspect its graph.</p>
+      <div class="toolbar">
+        <label class="select-label">Kernel:
+          <select id="cp-dag-select"></select>
+        </label>
+        <a href="#" id="cp-dag-explore" class="cp-navlink" title="Open this kernel in Kernel Lab">explore ↗</a>
+        <span id="cp-dag-info" class="muted small"></span>
+      </div>
+      <div class="cp-dag-duo">
+        <div class="cp-dag-side"><h4 class="cp-dag-side-title" style="color:var(--cce)">● CCE</h4><div id="cp-dag-cce" class="cp-dag-wrap"></div></div>
+        <div class="cp-dag-side"><h4 class="cp-dag-side-title" style="color:var(--vmi)">● DSL</h4><div id="cp-dag-dsl" class="cp-dag-wrap"></div></div>
+      </div>
+      <div class="cp-dag-legend">
+        <span class="lg"><span class="sw" style="background:#fbbf24"></span><strong style="color:#fbbf24">critical path</strong></span>
+        <span class="lg"><span class="sw" style="background:#5b6b8a"></span>dependency arrow</span>
+        <span class="lg" style="opacity:.85">node = <code>op</code> (intrinsic) · <code>sub-unit</code> · <code>N cyc</code> (latency)</span>
+        <span class="lg"><span class="sw" style="background:var(--cce)"></span>load (LDU)</span>
+        <span class="lg"><span class="sw" style="background:var(--vmi)"></span>store (STU)</span>
+        <span class="lg"><span class="sw" style="background:var(--good)"></span>add/cvt (ADD)</span>
+        <span class="lg"><span class="sw" style="background:#4fd1c5"></span>mul (MUL)</span>
+        <span class="lg"><span class="sw" style="background:var(--warn)"></span>slide (SLIDE)</span>
+        <span class="lg"><span class="sw" style="background:var(--mi)"></span>lnexp (LNEXP)</span>
+        <span class="lg"><span class="sw" style="background:#f472b6"></span>sfu (SFU)</span>
+        <span class="lg"><span class="sw" style="background:var(--bad)"></span>gather (GSU)</span>
+        <span class="lg"><span class="sw" style="background:var(--dim)"></span>scalar/addr</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Per-kernel critical path <span class="muted small" id="cp-table-note"></span></h3>
+      <div class="toolbar">
+        <input type="search" id="cp-search" placeholder="Filter by kernel…">
+        <label class="select-label">Sort:
+          <select id="cp-sort">
+            <option value="cp_desc">critical path (longest first)</option>
+            <option value="cp_asc">critical path (shortest first)</option>
+            <option value="cce_desc">CCE vf_real (slowest first)</option>
+            <option value="vmi_desc">VMI vf_real (slowest first)</option>
+            <option value="ratio_desc">CCE hide % (most hidden first)</option>
+            <option value="kernel">Kernel (A→Z)</option>
+          </select>
+        </label>
+      </div>
+      <div class="table-wrap"><table class="data-table" id="cp-table"></table></div>
+      <p class="muted small">Chain chips are colored by sub-unit; the subscript is each instruction's latency (cycles). <span class="cp-chip-demo" data-su="LDU">load</span> <span class="cp-chip-demo" data-su="ADD">add/cvt</span> <span class="cp-chip-demo" data-su="MUL">mul</span> <span class="cp-chip-demo" data-su="SLIDE">slide</span> <span class="cp-chip-demo" data-su="LNEXP">lnexp</span> <span class="cp-chip-demo" data-su="STU">store</span> <span class="cp-chip-demo" data-su="SFU">sfu</span> <span class="cp-chip-demo" data-su="GSU">gather</span></p>
+    </div>
+    </div>
+    <div class="sub-panel" data-sub="roofline">
+    <div class="card">
+      <h2>Theory vs actual <span class="count" id="th-count"></span></h2>
+      <p class="muted">Throughput-roofline estimate (from <code>vf_perf_estimation.md</code>) vs measured CA-sim cycles (<code>vf_real</code>) for <strong>CCE</strong> and <strong>VMI</strong>. A negative gap = actual faster than the model predicted (the model is conservative).</p>
+      <div id="th-kpis" class="cp-kpi-grid"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>① Gap vs theory — per kernel (■ CCE + ■ VMI)</h3>
+      <p class="muted small">Two bars per kernel: <span style="color:var(--cce)">■ CCE</span> and <span style="color:var(--vmi)">■ VMI</span>, each = (actual − theory lower) / theory lower. Left of zero = faster than theory; the grey band is the model's [lo–hi] range. Click a row to explore.</p>
+      <div id="th-scatter" class="chart th-chart-large"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>② IPC — theory (x) vs actual (y)</h3>
+      <p class="muted small">Theory IPC from the roofline estimate; CCE/VMI IPC from actual <code>vf_real</code>. Below the diagonal = actual throughput lower than predicted. <span style="color:var(--cce)">● CCE</span> · <span style="color:var(--vmi)">● VMI</span>.</p>
+      <div id="th-ipc-scatter" class="chart th-chart-large"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>③ Per-kernel table <span class="muted small" id="th-table-note"></span></h3>
+      <div class="toolbar">
+        <select id="th-sort">
+          <option value="theory_desc">Theory cycles (high→low)</option>
+          <option value="theory_asc">Theory cycles (low→high)</option>
+          <option value="cce_desc">CCE cycles (high→low)</option>
+          <option value="vmi_desc">VMI cycles (high→low)</option>
+          <option value="gap_desc">Gap % (large→small)</option>
+          <option value="gap_asc">Gap % (small→large)</option>
+          <option value="th_ipc_desc">Theory IPC (high→low)</option>
+          <option value="cce_ipc_desc">CCE IPC (high→low)</option>
+          <option value="kernel">Kernel (A→Z)</option>
+        </select>
+      </div>
+      <div class="table-wrap"><table class="data-table" id="th-table"></table></div>
+    </div>
+    </div>
+  </section>
+</template>
+
+
+
+<template id="tpl-versions">
+  <section class="view-section">
+    <div class="card">
+      <h2>Versions</h2>
+      <div id="run-panel" class="run-panel" hidden></div>
+      <details class="cov-filter-wrap">
+        <summary>❓ How the version actions work</summary>
+        <table class="data-table cov-action-guide">
+          <thead><tr><th>Action</th><th>What it does</th><th>Changes the daily baseline?</th></tr></thead>
+          <tbody>
+            <tr><td><strong>🔬 Run as snapshot</strong></td><td>Runs the full sim and saves this version as a <strong>comparison snapshot</strong> (appears in Compare + the header dropdown).</td><td class="muted">No</td></tr>
+            <tr><td><strong>⭐ Set as baseline</strong></td><td>Installs this version into the daily-refresh venv only — <strong>no data changes yet</strong>; the next nightly refresh will use it.</td><td class="muted">Next refresh</td></tr>
+            <tr><td><strong>⚡ Set + refresh now</strong></td><td>Installs it <strong>and</strong> runs the full refresh now — rebuilds the dashboard with it and makes it current. (~30–40 min)</td><td class="good">Yes, now</td></tr>
+            <tr><td><strong>★ promote to current</strong> <span class="muted small">(🗂 Manage)</span></td><td>Makes an <strong>existing snapshot</strong> the current baseline instantly — copies its already-computed data <strong>and reinstalls its whl</strong> into the daily-refresh venv (no re-sim).</td><td class="good">Yes, now</td></tr>
+          </tbody>
+        </table>
+        <p class="muted small">Fast path: <strong>🔬 Run as snapshot</strong> → review it in 📊 Compare → <strong>★ promote</strong> it in 🗂 Manage (or ⚡ Set + refresh).</p>
+      </details>
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-sub="compare">📊 Compare</button>
+        <button class="sub-tab" data-sub="manage">🗂 Manage</button>
+        <button class="sub-tab" data-sub="add">📥 Add &amp; Baseline</button>
+      </div>
+
+      <div class="sub-panel active" data-sub="compare">
+        <details class="cov-filter-wrap" open>
+          <summary>📖 How to read version comparisons</summary>
+          <div class="muted small" style="line-height:1.6">
+            <p><strong>PTOAS is the VMI/DSL compiler.</strong> Switching PTOAS versions changes how DSL kernels are lowered to VMI — so it only affects the <strong>VMI</strong> side of each matched pair.</p>
+            <p><strong>CCE (bisheng) is a fixed control</strong> — it does not change when you switch PTOAS versions, so CCE numbers stay identical across A/B. Only VMI charts are shown; the CCE charts would just repeat the same points.</p>
+            <p><strong>What to look at (VMI only):</strong></p>
+            <ul>
+              <li><strong>vf_real</strong> — wall-clock cycles, lower = faster (the headline metric).</li>
+              <li><strong>IPC</strong> — issue rate, higher = better.</li>
+              <li><strong>EX-IPC</strong> — vector-pipe throughput (max ~2.0 via dual-issue).</li>
+              <li><strong>EX count</strong> — vector compute ops; fewer = leaner lowering (e.g. new fused ops).</li>
+            </ul>
+            <p><strong>Workflow:</strong> pick <strong>A</strong> (older) vs <strong>B</strong> (newer) → read the VMI deltas below (Δ% per kernel, “B faster”/“B slower”) → then use <strong>📥 Add &amp; Baseline</strong> to run a snapshot or adopt a version as the daily baseline.</p>
+            <p><strong>Diagonal:</strong> below = B faster, above = B slower, on the line = no change.</p>
+          </div>
+        </details>
+
+        <div class="toolbar" style="margin-top:10px">
+          <label class="select-label">Version A (x): <select id="cmp-ver-a"></select></label>
+          <label class="select-label" style="margin-left:8px">Version B (y): <select id="cmp-ver-b"></select></label>
+          <button id="cmp-swap" class="cov-clear" style="margin-left:8px">Swap</button>
+          <span id="cmp-ver-count" class="muted small" style="margin-left:12px"></span>
+        </div>
+        <div class="perf-grid">
+          <div class="card"><h3>vf_real (VMI) — wall-clock cycles</h3><p class="muted small">Lower = faster.</p><div id="cmp-scatter-vfreal-vmi" class="chart perf-chart"></div></div>
+          <div class="card"><h3>IPC (VMI) — issue rate</h3><p class="muted small">Higher = better.</p><div id="cmp-scatter-ipc-vmi" class="chart perf-chart"></div></div>
+          <div class="card"><h3>EX-IPC (VMI) — vector throughput</h3><p class="muted small">Higher = better. Max ~2.0.</p><div id="cmp-scatter-exipc-vmi" class="chart perf-chart"></div></div>
+          <div class="card"><h3>EX count (VMI) — compute ops</h3><p class="muted small">Lower = fewer ops (better code gen).</p><div id="cmp-scatter-ex-vmi" class="chart perf-chart"></div></div>
+        </div>
+        <div class="card">
+          <h3>Per-kernel delta table <span class="muted small">(VMI vf_real, B − A)</span> <span class="muted small" id="cmp-table-note"></span></h3>
+          <div class="table-wrap"><table class="data-table" id="cmp-table"></table></div>
+        </div>
+      </div>
+
+      <div class="sub-panel" data-sub="manage">
+        <div id="cmp-manage-status" class="cmp-manage-status"></div>
+        <div id="cmp-versions-manage" class="cov-gaps"></div>
+        <h3 style="margin-top:16px">whl files <span class="muted small">(uploaded)</span></h3>
+        <div id="cmp-whl-list" class="whl-list-section"></div>
+        <div id="cmp-sim-log-wrap" class="sim-log-wrap" style="display:none">
+          <h4>Simulation Log <span class="muted small">(live)</span></h4>
+          <pre id="cmp-sim-log" class="sim-log"></pre>
+        </div>
+      </div>
+
+      <div class="sub-panel" data-sub="add">
+        <div id="cmp-release-banner" class="cmp-release-banner" hidden></div>
+        <details class="cov-filter-wrap" open>
+          <summary>Upload a <code>.whl</code> (manual)</summary>
+          <div id="cmp-upload-zone" class="upload-zone">
+            <div class="upload-inner">
+              <div class="upload-icon">📦</div>
+              <div class="upload-text">Drop <code>.whl</code> here or <label class="upload-link" for="cmp-file-input">browse</label></div>
+              <input type="file" id="cmp-file-input" accept=".whl" hidden>
+              <div class="upload-hint"><code>*.whl</code> — typically 30–80MB</div>
+            </div>
+          </div>
+          <div id="cmp-upload-status"></div>
+          <p class="muted small" style="margin-top:8px">Get a whl: <code>cd ~/PTOAS && pip wheel . -w dist/ --no-deps</code> (→ <code>dist/*.whl</code>), or download the linux cp312 wheel from the <a href="https://github.com/hw-native-sys/PTOAS/releases" target="_blank" rel="noopener">PTOAS releases</a>. Uploading runs it as a <strong>snapshot</strong> (like 🔬 Run as snapshot, but from your own file) — progress appears in the run panel above.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+</template>
+<template id="tpl-report">
+  <section class="view-section">
+    <div class="card">
+      <h2>Raw report (Markdown)</h2>
+      <p class="muted">Full <code>cce_vmi_ca_report.md</code> rendered to HTML.</p>
+      <div class="md-body" id="md-render"></div>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-explorer">
+  <section class="view-section">
+    <div class="card">
+      <h2>Kernel Lab — inspect, edit &amp; simulate a kernel <span class="count" id="explorer-count"></span></h2>
+      <details class="ex-workflow-notes">
+        <summary>📖 How to use this tab — workflow guide</summary>
+        <div class="ex-workflow-body">
+          <h4>Overview</h4>
+          <p class="muted">Per-kernel workbench with 4 sub-tabs: <strong>🔎 Lowering</strong> (CCE C++ ↔ VMI/DSL Python ↔ MI IR side-by-side), <strong>⛓ DAG</strong> (dependency graph), <strong>📋 Overview</strong> (baseline metrics), and <strong>🔧 Edit &amp; Simulate</strong> (edit the DSL, compile, run the sim).</p>
+          <div class="ex-alert"><strong>PTOAS is VMI-only.</strong> Editing + re-running affects the <strong>VMI/DSL</strong> side of the kernel. CCE (bisheng) is a separate, fixed compiler — shown for reference, it does not change with your edits. The disasm/timeline shown is the <strong>VMI execution trace</strong>; a CCE disasm is still selectable per-pane if you want to inspect the CCE side.</div>
+
+          <h4>Step 1 — Pick a kernel</h4>
+          <p class="muted">Choose a kernel from the dropdown at the top. In <strong>🔎 Lowering</strong>, the default 3-way layout is <strong>CCE C++ (left) | VMI/DSL Python (middle) | MI IR (right)</strong>. Use <strong>3-way / 2-pane</strong> to switch, and the per-pane dropdowns to swap any pane to MLIR, LLVM IR, or the A5 disasm.</p>
+
+          <h4>Step 2 — Read the correlation</h4>
+          <p class="muted"><strong>Click a line</strong> in any pane to highlight its correlated lines everywhere (op→mnemonic via the VMI disasm); <strong>hover</strong> for a quick peek. Use <strong>⤓ show compute</strong> to jump all panes to <code>__VEC_SCOPE__</code>, or <strong>▢ maximize</strong> to expand one pane. In the disasm pane, filter by mnemonic or tick <strong>stalls</strong> to see only stalled ticks — the <strong>timeline bar</strong> marks each stall.</p>
+
+          <h4>Step 3 — Edit the DSL</h4>
+          <p class="muted">Click <strong>✎ edit</strong> on the VMI/DSL Python pane (or CCE C++) for a textarea with syntax highlighting; modified lines are marked vs original and <strong>↺ revert</strong> restores them. Edits are kept in memory until you compile or run.</p>
+          <div class="ex-alert">You don’t need to stay in edit mode — your edits are saved automatically when you compile or run.</div>
+
+          <h4>Step 4 — Compile (fast IR check)</h4>
+          <p class="muted">In <strong>🔧 Edit &amp; Simulate</strong>, click <strong>⚙ compile</strong> to emit MLIR + MI IR from your edited DSL (~3s on ecs). The <strong>MI IR diff</strong> shows original vs edited with 🟢 added / 🔴 removed lines; the side selector (both / CCE / VMI) controls which side compiles.</p>
+          <div class="ex-alert"><strong>Compile ≠ sim</strong> — it only re-emits IR, no new performance numbers.</div>
+
+          <h4>Step 5 — Run the sim</h4>
+          <p class="muted">Click <strong>▶ run</strong> to execute the edited kernel on the A5 camodel sim (CANN 9.1.0 + the current ptoas-vmi baseline, ~30–130s). A progress bar + streaming log appear; when done:</p>
+          <ul class="muted">
+            <li><strong>📊 My Edit vs Original</strong> — before/after (vf_real, EX/LD/ST/SU, stalls…) with Δ and Δ%</li>
+            <li><strong>📈 Instruction Breakdown</strong> — original vs edited per-unit and per-opcode</li>
+            <li><strong>Disasm pane</strong> — reloads with the fresh VMI execution trace</li>
+          </ul>
+          <div class="ex-alert"><strong>Run =</strong> save DSL → full A5 sim (CCE + VMI) → rebuild the bundle (edited source/MLIR/MI IR + fresh disasm + fresh perf) → reload.</div>
+
+          <h4>Step 6 — Iterate</h4>
+          <p class="muted">Edit → compile → run. Each run is kept in the <strong>run history</strong> dropdown; click a past entry to restore its bundle + diffs. <strong>📑 re-baseline</strong> sets “before” to the current state (iteration N vs N−1 instead of always vs original).</p>
+
+          <h4>Tips</h4>
+          <ul class="muted">
+            <li><strong>MI IR diff is VMI-only</strong> — CCE compiles to machine code, not MI IR.</li>
+            <li><strong>Source links ↗</strong> open the original file on gitcode at the exact commit.</li>
+            <li><strong>Sandbox isolation</strong> — edits go to <code>~/ide_sandbox/</code> on ecs, never the pto-vmi repo (cleaned after 7 days).</li>
+            <li><strong>⏹ stop</strong> terminates a running compile/sim; <strong>kill all</strong> clears every leftover sandbox run.</li>
+            <li>Open this view from anywhere via <strong>explore ↗</strong> on a kernel row; the drawer’s <strong>peek</strong> gives a quick look first.</li>
+          </ul>
+        </div>
+      </details>
+      <div class="toolbar">
+        <select id="explorer-select"><option value="">Loading kernels…</option></select>
+        <span id="explorer-status" class="muted" style="margin-left:12px"></span>
+      </div>
+      <div id="ex-fact-strip" class="ex-fact-strip"></div>
+      <div class="ex-tabs" id="ex-tabs">
+        <button class="ex-tab active" data-extab="lowering">🔎 Lowering</button>
+        <button class="ex-tab" data-extab="criticalpath">⛓ DAG</button>
+        <button class="ex-tab" data-extab="overview">📋 Overview</button>
+        <button class="ex-tab" data-extab="ide">🔧 Edit &amp; Simulate <span id="ex-ide-tab-badge" class="ex-toggle-count"></span></button>
+      </div>
+      <div id="ex-panel-lowering" class="ex-tabpanel active">
+        <div id="explorer-view" class="explorer-container"></div>
+      </div>
+      <div id="ex-panel-criticalpath" class="ex-tabpanel">
+        <div class="ex-baseline-note" id="explorer-dag-note">ⓘ ORIGINAL — critical path of the original source</div>
+        <div class="cp-dag-wrap cp-modal-dag" id="explorer-cpdag"></div>
+      </div>
+      <div id="ex-panel-overview" class="ex-tabpanel">
+        <div id="explorer-overview"></div>
+      </div>
+      <div id="ex-panel-ide" class="ex-tabpanel">
+        <div id="explorer-ide" class="explorer-ide-host"></div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<div id="modal" class="modal hidden">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3 id="modal-title"></h3>
+      <button class="modal-close" data-close aria-label="close">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<div id="detail-drawer" class="detail-drawer hidden">
+  <div class="detail-drawer-head">
+    <span id="detail-drawer-title" class="detail-drawer-title">—</span>
+    <div class="detail-drawer-head-actions">
+      <button id="detail-drawer-explore" class="detail-drawer-btn" title="Open the full Kernel Lab (source, disasm, DAG, IDE)">open in Kernel Lab ↗</button>
+      <button id="detail-drawer-close" class="detail-drawer-close" aria-label="Close detail">✕</button>
+    </div>
+  </div>
+  <div class="detail-drawer-body" id="detail-drawer-body"></div>
+</div>
+
+<script src="data.js?v=20260914021921"></script>
+<script src="app.js?v=20260916172045"></script>
+</body>
+</html>
