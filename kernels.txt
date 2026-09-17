@@ -1,0 +1,41 @@
+# A6 (dav_9201) CCE <-> DSL kernel list — single source of truth for a6-vmi-dashboard.
+#
+# One kernel per line. Lines starting with '#' are skipped.
+# Only UNCOMMENTED kernels are run by ops/run_cce.sh and ops/run_vmi.sh.
+# Validate one kernel at a time and uncomment it as it PASSes on dav_9201.
+
+# ---- active ----
+VcvtMergeModeKernel
+
+# ---- matched pairs (CCE + DSL both present) — candidates, not yet validated ----
+# ActMinMaxClamp
+# AmaxPerBlockKernel
+# AntiQuantComputeNKMxNz
+# AntiQuantPerChannelKernel
+# AntiMxQuantDequantKernel
+# AntiquantVFImplW8D64Kernel
+# B4ToB2CastKernel
+# B4ToB1CastKernel
+# B2ToB1CastKernel
+# CrossEntropyLossFullLoadKernel
+# CastNd2nzKernel
+# clippedSwigluKernel
+# DintlvCmpHistVfKernel
+# ComputeGeluTanhKernel
+# DynamicMxQuantVfKernel
+# ExpertTokenHistVfKernel
+# FakeQuantMinMaxArgsKernel
+# SiluGradKernel
+# SigmoidGradKernel
+# VFProcessSwigluVfQuantKernel
+# ScaleVfKernel
+# RowMaxKernel
+# SoftmaxGradKernel
+# ScalarAxpyKernel
+# VFSwiGluKernel
+# SigmoidHalfKernel
+# SwishHalfKernel
+# GroupNormSwishGradUnalignVfKernel
+# FlatQuantExpMaxDintlvB16VfKernel
+# Fa4VsstbNzStoreKernel
+# Fa2VsstbNzStoreKernel

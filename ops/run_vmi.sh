@@ -43,25 +43,20 @@ LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs/a6_vmi_logs}"
 MANIFEST="${LOG_ROOT}/_manifest.tsv"
 PER_CASE_TIMEOUT="${PER_CASE_TIMEOUT:-600}"
 
-# ── The 31 kernels with matching CCE counterparts (legacy subset) ──────────
-# Used only when --matched is passed. --all (default) discovers every kernel
-# under ~/pto-vmi/dsl/ that has a <Kernel>_case0_*.py or <Kernel>_real_*.py.
-MATCHED_KERNELS=(
-  ActMinMaxClamp AmaxPerBlockKernel AntiQuantComputeNKMxNz AntiQuantPerChannelKernel
-  AntiMxQuantDequantKernel AntiquantVFImplW8D64Kernel B4ToB2CastKernel B4ToB1CastKernel
-  B2ToB1CastKernel CrossEntropyLossFullLoadKernel CastNd2nzKernel clippedSwigluKernel
-  DintlvCmpHistVfKernel ComputeGeluTanhKernel DynamicMxQuantVfKernel ExpertTokenHistVfKernel
-  FakeQuantMinMaxArgsKernel SiluGradKernel SigmoidGradKernel VFProcessSwigluVfQuantKernel
-  ScaleVfKernel RowMaxKernel SoftmaxGradKernel ScalarAxpyKernel VFSwiGluKernel
-  SigmoidHalfKernel SwishHalfKernel GroupNormSwishGradUnalignVfKernel
-  FlatQuantExpMaxDintlvB16VfKernel Fa4VsstbNzStoreKernel Fa2VsstbNzStoreKernel
-)
+# ── Kernel list: single source of truth is kernels.txt (repo root) ─────────
+# Used when --matched is passed. Only UNCOMMENTED kernels run.
+KERNELS_FILE="${KERNELS_FILE:-$SCRIPT_DIR/../kernels.txt}"
+if [[ -f "$KERNELS_FILE" ]]; then
+  mapfile -t MATCHED_KERNELS < <(grep -vE '^\s*(#|$)' "$KERNELS_FILE" | awk '{print $1}')
+else
+  MATCHED_KERNELS=(VcvtMergeModeKernel)
+fi
 
 # ── Parse args ──────────────────────────────────────────────────────────────
 VERBOSE=0
 KERNEL_FILTER=""
 LIST_ONLY=0
-DISCOVER_MODE="demo"    # "demo" (default, ~50 from docs/demo_kernels.md), "all", or "matched"
+DISCOVER_MODE="matched"    # "matched" (kernels.txt) [default], "demo", or "all"
 SKIP_PASS=0             # set by --resume / --retry-failed
 SKIP_LABEL=""           # messaging only
 while [[ $# -gt 0 ]]; do

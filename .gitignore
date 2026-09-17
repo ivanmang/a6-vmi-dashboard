@@ -1,0 +1,13 @@
+# Generated dashboard data — never committed. The A6 repo stays data-free
+# (source + kernels.txt only); build_dashboard.sh regenerates everything on
+# the yellow zone. This also guarantees zero A5 data leaks into the A6 repo.
+/data/
+/web/data.js
+/web/explorer/
+/web/critical_path.json
+/web/wipc_all.json
+/web/theory_vs_actual.json
+
+# Python bytecode + editor noise
+__pycache__/
+*.pyc

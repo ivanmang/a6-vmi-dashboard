@@ -32,18 +32,14 @@ LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs/a6_cce_logs}"
 PER_CASE_TIMEOUT="${PER_CASE_TIMEOUT:-1800}"
 A6_ARCH="dav-920r1-vec"
 
-# ── The 31 kernels with matching VMI/DSL counterparts ───────────────────────
-# These are the same kernels used in the A5 dashboard comparison.
-KERNELS=(
-  ActMinMaxClamp AmaxPerBlockKernel AntiQuantComputeNKMxNz AntiQuantPerChannelKernel
-  AntiMxQuantDequantKernel AntiquantVFImplW8D64Kernel B4ToB2CastKernel B4ToB1CastKernel
-  B2ToB1CastKernel CrossEntropyLossFullLoadKernel CastNd2nzKernel clippedSwigluKernel
-  DintlvCmpHistVfKernel ComputeGeluTanhKernel DynamicMxQuantVfKernel ExpertTokenHistVfKernel
-  FakeQuantMinMaxArgsKernel SiluGradKernel SigmoidGradKernel VFProcessSwigluVfQuantKernel
-  ScaleVfKernel RowMaxKernel SoftmaxGradKernel ScalarAxpyKernel VFSwiGluKernel
-  SigmoidHalfKernel SwishHalfKernel GroupNormSwishGradUnalignVfKernel
-  FlatQuantExpMaxDintlvB16VfKernel Fa4VsstbNzStoreKernel Fa2VsstbNzStoreKernel
-)
+# ── Kernel list: single source of truth is kernels.txt (repo root) ─────────
+# Only UNCOMMENTED kernels run. Currently validated: VcvtMergeModeKernel.
+KERNELS_FILE="${KERNELS_FILE:-$SCRIPT_DIR/../kernels.txt}"
+if [[ -f "$KERNELS_FILE" ]]; then
+  mapfile -t KERNELS < <(grep -vE '^\s*(#|$)' "$KERNELS_FILE" | awk '{print $1}')
+else
+  KERNELS=(VcvtMergeModeKernel)
+fi
 
 # ── Parse args ──────────────────────────────────────────────────────────────
 VERBOSE=0
