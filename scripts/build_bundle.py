@@ -498,15 +498,19 @@ def main():
             cce_lines = f.read().splitlines()
     cce_rel = os.path.relpath(cce_cpp_file, repo) if cce_cpp_file else None
 
-    # --- 2. DSL py (find the real-shape .py matching the case) ---
+    # --- 2. DSL py (prefer the .py matching --case; fall back to sorted first) ---
     dsl_dir = os.path.join(repo, "dsl", args.kernel)
     dsl_py_file = None
     if os.path.isdir(dsl_dir):
-        pys = sorted(f for f in os.listdir(dsl_dir) if f.endswith(".py") and "_real_" in f)
-        if not pys:
-            pys = sorted(f for f in os.listdir(dsl_dir) if f.endswith(".py"))
-        if pys:
-            dsl_py_file = os.path.join(dsl_dir, pys[0])
+        case_py = os.path.join(dsl_dir, args.case + ".py")
+        if os.path.isfile(case_py):
+            dsl_py_file = case_py
+        else:
+            pys = sorted(f for f in os.listdir(dsl_dir) if f.endswith(".py") and "_real_" in f)
+            if not pys:
+                pys = sorted(f for f in os.listdir(dsl_dir) if f.endswith(".py"))
+            if pys:
+                dsl_py_file = os.path.join(dsl_dir, pys[0])
     dsl_lines = []
     if dsl_py_file:
         with open(dsl_py_file, encoding="utf-8", errors="replace") as f:
