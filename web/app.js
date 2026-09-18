@@ -1,4 +1,17 @@
 /* app.js — CCE vs VMI dashboard logic. Vanilla JS, no dependencies. */
+/* A6: short-circuit A5-only endpoints (Cost Model / wIPC / Versions / run-monitor /
+   IDE / per-kernel conclusion) so they don't 404 — none have A6 data yet. */
+(function(){
+  var A6_MISSING = ["critical_path.json","wipc_all.json","/data/versions/versions.json","/run/status","/ide/count","/conclusion/"];
+  var origFetch = window.fetch;
+  window.fetch = function(url, opts){
+    var u = String(url);
+    for (var i=0;i<A6_MISSING.length;i++){ if (u.indexOf(A6_MISSING[i])>=0){
+      return Promise.resolve({ok:true, json:function(){return Promise.resolve(null);}, text:function(){return Promise.resolve("");}});
+    } }
+    return origFetch.apply(this, arguments);
+  };
+})();
 (function(){
 "use strict";
 var R = window.REPORT;
