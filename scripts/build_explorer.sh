@@ -19,7 +19,8 @@ for kernel in "${KERNELS[@]}"; do
   dsl_dir="$REPO_ROOT/dsl/$kernel"
   py=""
   if [[ -d "$dsl_dir" ]]; then
-    py=$(find "$dsl_dir" -maxdepth 1 -type f \( -name "${kernel}_case0_*.py" -o -name "${kernel}_real_*.py" \) 2>/dev/null | sort | head -1)
+    py=$(find "$dsl_dir" -maxdepth 1 -type f -name "${kernel}_*_emit.py" 2>/dev/null | sort | head -1)
+    [[ -z "$py" ]] && py=$(find "$dsl_dir" -maxdepth 1 -type f \( -name "${kernel}_case0_*.py" -o -name "${kernel}_real_*.py" \) 2>/dev/null | sort | head -1)
     [[ -z "$py" ]] && py=$(find "$dsl_dir" -maxdepth 1 -name "*.py" 2>/dev/null | sort | head -1)
   fi
   if [[ -z "$py" ]]; then
