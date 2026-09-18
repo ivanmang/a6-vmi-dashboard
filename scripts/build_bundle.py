@@ -207,7 +207,9 @@ def emit_ptoas(mlir_text, ptoas_bin, mode, tmpdir, tag, arch):
     out_file = os.path.join(tmpdir, f"{tag}.{mode.replace('--','').replace('-','_')}.out")
     with open(mlir_file, "w") as f:
         f.write(mlir_text)
-    cmd = [ptoas_bin, f"--pto-arch={arch}", "--pto-backend=vpto", mode, mlir_file, "-o", out_file]
+    cmd = [ptoas_bin, f"--pto-arch={arch}", "--pto-backend=vpto",
+           "--pto-level=level3", "--enable-tile-op-expand",
+           mode, mlir_file, "-o", out_file]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if r.returncode != 0 or not os.path.isfile(out_file):
         return None, r.stderr.strip()[:500]
