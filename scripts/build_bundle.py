@@ -192,10 +192,11 @@ def find_mlir_ops(mlir_lines, vmi_to_rv):
 # ---------------------------------------------------------------------------
 # IR emission (MLIR via --emit-mlir; VPTO + LLVM via ptoas)
 # ---------------------------------------------------------------------------
-def emit_mlir(py_path, pto_python):
+def emit_mlir(py_path, pto_python, arch):
+    env = dict(os.environ, PTO_TARGET=arch)
     for flag in ("--emit-mlir", "--emit"):
         r = subprocess.run([pto_python, py_path, flag],
-                           capture_output=True, text=True, timeout=120)
+                           capture_output=True, text=True, timeout=120, env=env)
         if r.returncode == 0 and r.stdout.strip():
             return r.stdout, None
     return None, (r.stderr or "").strip()[:500]
@@ -513,7 +514,7 @@ def main():
     # --- 3. MLIR ---
     mlir_text, mlir_err = (None, "no DSL py")
     if dsl_py_file:
-        mlir_text, mlir_err = emit_mlir(dsl_py_file, pto_python)
+        mlir_text, mlir_err = emit_mlir(dsl_py_file, pto_python, args.arch)
     mlir_lines = mlir_text.splitlines() if mlir_text else []
 
     # --- 4+5. VPTO + LLVM IR ---
