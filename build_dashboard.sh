@@ -176,6 +176,13 @@ collect_dumps() {
     [[ -z "$case_dir" ]] && case_dir="unknown_$n"
     mkdir -p "$out_dir/$case_dir"
     cp -f "$dump" "$out_dir/$case_dir/core0.veccore0.instr_log.dump"
+    # The report builder excludes rows whose status != "PASS" (correctness check).
+    # We collect only executed kernels; a dump with a VF summary means it ran.
+    if grep -q 'vf_real_execute_time' "$dump" 2>/dev/null; then
+      echo "PASS" > "$out_dir/$case_dir/status"
+    else
+      echo "FAIL" > "$out_dir/$case_dir/status"
+    fi
     n=$((n+1))
   done < <(find "$search_dir" -name "core0.veccore0.instr_log.dump" -type f 2>/dev/null)
   if [[ $n -gt 0 ]]; then
