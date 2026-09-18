@@ -52,13 +52,12 @@ function showRawReport(){
 }
 var ftReport = document.getElementById("ft-report-link");
 if(ftReport) ftReport.addEventListener("click", function(e){ e.preventDefault(); showRawReport(); });
-// data freshness indicator on the homepage
+// data freshness indicator (A6 — no nightly refresh; build date + commit + pairs)
 (function(){
   var el2=document.getElementById("data-freshness"); if(!el2) return;
   var bd=META.build_date, bt=META.build_timestamp;
   var commit=META.pto_vmi_short_commit||META.pto_vmi_commit||"?";
-  var dStatus=META.daily_status||"unknown";
-  if(!bd){ el2.innerHTML="Data: pto-vmi <code>"+commit+"</code>"; return; }
+  if(!bd){ el2.innerHTML="Data: pto-vmi <code>"+commit+"</code> · "+MATCHED.length+" matched pair(s) · A6 (dav_9201)"; return; }
   // compute age
   var now=Date.now()/1000|0;
   var ageH = bt ? Math.floor((now-bt)/3600) : null;
@@ -69,13 +68,7 @@ if(ftReport) ftReport.addEventListener("click", function(e){ e.preventDefault();
     else { var d=Math.floor(ageH/24); ageStr=d+" day"+(d>1?"s":"")+" ago"; }
   }
   var cls = (ageH!=null && ageH>48) ? "stale" : "fresh";
-  // daily run status badge
-  var dBadge="";
-  if(dStatus==="success") dBadge='<span class="daily-status-badge daily-ok" title="Last nightly run succeeded">✓ nightly OK</span>';
-  else if(dStatus==="failed") dBadge='<span class="daily-status-badge daily-fail" title="Last nightly run FAILED — data may be stale">✗ nightly FAIL</span>';
-  else if(dStatus==="degraded") dBadge='<span class="daily-status-badge daily-degraded" title="Last nightly run completed but push/sync failed — data may be stale">⚠ nightly degraded</span>';
-  else dBadge='<span class="daily-status-badge daily-unknown" title="No nightly run status available">? nightly unknown</span>';
-  el2.innerHTML=dBadge+'<span class="freshness-'+cls+'">●</span> Last full run: '+bd+(ageStr?" ("+ageStr+")":"")+" · pto-vmi <code>"+commit+"</code> · "+MATCHED.length+" matched pairs";
+  el2.innerHTML='<span class="freshness-'+cls+'">●</span> Last full run: '+bd+(ageStr?" ("+ageStr+")":"")+" · pto-vmi <code>"+commit+"</code> · "+MATCHED.length+" matched pair(s) · A6 (dav_9201)";
 })();
 
 /* ---------------- helpers ---------------- */
