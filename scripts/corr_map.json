@@ -1,0 +1,23 @@
+{
+  "cce_to_rv": {
+    "vmuls":"RV_VMULS","vmul":"RV_VMUL","vadds":"RV_VADDS","vadd":"RV_VADD","vsub":"RV_VSUB","vdiv":"RV_VDIV",
+    "vcvt":"RV_VCVT_F2F","vcmp":"RV_VCMP","vcmps":"RV_VCMP","vsel":"RV_VSEL","vlds":"RV_VLDI","vld":"RV_VLD",
+    "vldi":"RV_VLDI","vldu":"RV_VLDI","vsts":"RV_VST","vst":"RV_VST","vstai":"RV_VST","vstas":"RV_VST",
+    "vbr":"RV_VDUP","vdup":"RV_VDUP","vci":"RV_VCI","vmax":"RV_VMAX","vmin":"RV_VMIN","vexp":"RV_VEXP",
+    "vln":"RV_VLN","vsqrt":"RV_VSQRT","vneg":"RV_VNEG","vabs":"RV_VABS","vand":"RV_VAND","vor":"RV_VOR",
+    "vxor":"RV_VXOR","vnot":"RV_VNOT","vmula":"RV_VMULA","vmadd":"RV_VMADD","vaxpy":"RV_VAXPY","vfma":"RV_VFMA",
+    "vdintlv":"RV_VDINTLV","vintlv":"RV_VINTLV","vpack":"RV_VPACK","vunpack":"RV_VUNPACK","vtrc":"RV_VTRC",
+    "vcadd":"RV_VCADD","vcmax":"RV_VCMAX","vcmin":"RV_VCMIN","vselr":"RV_VSELR","vsld":"RV_VSLD",
+    "pset_b32":"RV_PSET","pset_b16":"RV_PSET","pset_b8":"RV_PSET","plt_b32":"RV_PLT","plt_b16":"RV_PLT",
+    "pand":"RV_PAND","por":"RV_POR","pxor":"RV_PXOR","pnot":"RV_PNOT","psel":"RV_PSEL",
+    "set_flag":"RV_SETFLAG","wait_flag":"RV_WAITFLAG","TLOAD":"RV_MTE2","TSTORE":"RV_MTE3","TASSIGN":"RV_SEND"
+  },
+  "vmi_to_rv": {
+    "vmuls":"RV_VMULS","vmul":"RV_VMUL","vadds":"RV_VADDS","vadd":"RV_VADD","vsub":"RV_VSUB","vdiv":"RV_VDIV",
+    "vcvt":"RV_VCVT_F2F","vcmp":"RV_VCMP","vsel":"RV_VSEL","vload":"RV_VLD","vstore":"RV_VST","vbrc":"RV_VDUP",
+    "broadcast":"RV_VDUP","create_mask":"RV_PSET","vmula":"RV_VMULA","vfma":"RV_VFMA","vmax":"RV_VMAX",
+    "vmin":"RV_VMIN","vexp":"RV_VEXP","vln":"RV_VLN","vsqrt":"RV_VSQRT","vneg":"RV_VNEG","vabs":"RV_VABS",
+    "vand":"RV_VAND","vor":"RV_VOR","vxor":"RV_VXOR","vnot":"RV_VNOT","vdintlv":"RV_VDINTLV",
+    "vpack":"RV_VPACK","vunpack":"RV_VUNPACK","vcadd":"RV_VCADD","reduce_addf":"RV_VCADD","reduce_maxf":"RV_VCMAX"
+  }
+}

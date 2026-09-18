@@ -446,6 +446,14 @@ if [[ ! -f "$DASH/web/data.js" ]]; then
 fi
 pass "data.js built: $(du -h "$DASH/web/data.js" | cut -f1)"
 
+# ── Step 6.5: Build Kernel Lab (explorer) bundles ──────────────────────────
+hdr "Step 6.5: Build Kernel Lab (explorer) bundles"
+if [[ -x "$SCRIPT_DIR/scripts/build_explorer.sh" ]]; then
+  PTO_VMI_REPO="$REPO" PTO_VENV="${PTO_VENV:-$HOME/.venv-ptoas}" bash "$SCRIPT_DIR/scripts/build_explorer.sh" 2>&1 | tail -6
+else
+  warn "build_explorer.sh not found — Kernel Lab will be empty"
+fi
+
 # ── Step 7: wIPC (optional) ────────────────────────────────────────────────
 if [[ -f "$EXPLORER_SCRIPTS/compute_wipc.py" ]]; then
   hdr "Step 7: Compute wIPC (optional)"
