@@ -454,16 +454,7 @@ else
   warn "build_explorer.sh not found — Kernel Lab will be empty"
 fi
 
-# ── Step 7: wIPC (optional) ────────────────────────────────────────────────
-if [[ -f "$EXPLORER_SCRIPTS/compute_wipc.py" ]]; then
-  hdr "Step 7: Compute wIPC (optional)"
-  WIPC_JSON="$DASH/web/wipc_all.json"
-  info "compute_wipc.py"
-  PTO_VMI_REPO="$REPO" python3 "$EXPLORER_SCRIPTS/compute_wipc.py" \
-    --cce-log-root "$CCE_LOG" \
-    --output "$WIPC_JSON" 2>&1 | tail -3
-  [[ -f "$WIPC_JSON" ]] && pass "wIPC: $(du -h "$WIPC_JSON" | cut -f1)" || warn "wIPC computation skipped"
-fi
+# ── Step 7: wIPC (removed for A6 — A5-only model, wipc_all.json is shimmed in app.js) ──
 
 # ── Summary ────────────────────────────────────────────────────────────────
 hdr "Dashboard Build Complete"
