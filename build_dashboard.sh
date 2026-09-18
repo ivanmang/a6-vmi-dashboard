@@ -486,13 +486,13 @@ if [[ $DO_SERVE -eq 1 ]]; then
   hdr "Starting dashboard server"
   pkill -f "http.server.*:$PORT" 2>/dev/null; sleep 1
   info "Serving on http://0.0.0.0:$PORT"
-  info "Open: http://localhost:$PORT/web/index.html"
+  info "Open: http://localhost:$PORT/index.html"
   cd "$DASH/web"
   python3 -m http.server "$PORT" --bind 0.0.0.0 &
   SERVE_PID=$!
   sleep 2
   if kill -0 $SERVE_PID 2>/dev/null; then
-    pass "Dashboard running at http://localhost:$PORT/web/index.html"
+    pass "Dashboard running at http://localhost:$PORT/index.html"
     echo "  Press Ctrl+C to stop"
     wait $SERVE_PID
   else
