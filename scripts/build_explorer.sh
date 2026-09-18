@@ -11,6 +11,8 @@ EXPLORER_DIR="$SCRIPT_DIR/../web/explorer"
 BUNDLE_PY="$SCRIPT_DIR/build_bundle.py"
 
 mkdir -p "$EXPLORER_DIR"
+# generated dir — clear stale bundles so only this build's kernels remain
+rm -f "$EXPLORER_DIR"/*.json
 [[ -f "$KERNELS_FILE" ]] || { echo "[explorer] missing $KERNELS_FILE"; exit 1; }
 mapfile -t KERNELS < <(grep -vE '^\s*(#|$)' "$KERNELS_FILE" | awk '{print $1}')
 echo "[explorer] building Kernel Lab for ${#KERNELS[@]} active kernel(s)"
