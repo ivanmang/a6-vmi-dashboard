@@ -28,6 +28,7 @@
     <!-- <button class="tab" data-view="versions">Versions</button> -->
     <!-- <button class="tab" data-view="coverage">Feature Coverage</button> -->
     <button class="tab" data-view="summary">Diagnosis</button>
+    <button class="tab" data-view="pipeline">Pipeline</button>
   </nav>
   <div class="version-bar">
     <label class="ver-lbl">pto-as version:</label>
@@ -42,6 +43,101 @@
 <footer class="footer">
   <span>Data: <code>cce_vmi_ca_report.json</code> (real-shape) · <span id="ft-cce-cases">—</span> CCE cases / <span id="ft-matched">—</span> matched pairs / <span id="ft-cceonly">—</span> CCE-only / <span id="ft-excluded">—</span> excluded · pto-vmi <code id="ft-commit">—</code> · <span id="ft-ptoas">—</span> / <span id="ft-cann">—</span> · IPC = total_rvec_executed/vf_compute_span (max 2.0) · offline build, no external deps · <a href="#" id="ft-report-link">raw report ↗</a></span>
 </footer>
+
+<template id="tpl-pipeline">
+  <section class="view-section">
+    <div class="card">
+      <h2>How a kernel runs on A6 (dav_9201) — toolchain, compiler &amp; lowering</h2>
+      <p class="muted">Two routes converge on the <strong>same</strong> A6 device ISA (<code>dav-920r1-vec</code>) and the <strong>same</strong> runtime (<code>libascendcl</code> + <code>libruntime_camodel</code>). CCE writes the device instructions by hand; DSL derives them through a lowering stack.</p>
+      <pre style="font-size:12px;line-height:1.5;overflow-x:auto">CCE (hand-written)                    DSL (ptodsl/ptoas)
+────────────────────────             ──────────────────────────
+vcvt_merge_mode_kernel.cpp          *.py  (@pto.jit + pto.vmi.*)
+         │                               │  ptodsl tracing
+         │ (bisheng -xcce)              ▼
+         │                        VMI IR (MLIR logical vector ops)
+         │                               │  ptoas: VMIToVPTO
+         │                               ▼
+         │                        VPTO IR (256-byte physical vectors)
+         │                               │  ptoas: VPTO→LLVM
+         │                               ▼
+         │                        LLVM IR (llvm.hivm.*)
+         │                               │  bisheng backend (SelectionDAG)
+         ▼                               ▼
+   device fatobj  ◄──────────────  device fatobj
+         │                               │
+         └────────  host: aclInit→SetDevice→launch  ──────────┘
+                               │
+                               ▼
+                   dav_9201 camodel (cycle sim → instr_log.dump)</pre>
+    </div>
+
+    <div class="card">
+      <h2>Shared toolchain pieces</h2>
+      <div class="table-wrap"><table class="data-table compact">
+        <thead><tr><th>Piece</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td><code>bisheng</code> (CANN 9.1.0)</td><td>LLVM/clang C++ + A6 device compiler (<code>--cce-aicore-arch=dav-920r1-vec</code>)</td></tr>
+          <tr><td><code>pto-isa</code></td><td>A6 ISA headers — <code>pto-inst.hpp</code> + <code>arch_macro.hpp</code> (<code>__NPU_ARCH__==9201 → PTO_NPU_ARCH_A6</code>). CANN 9.1.0's own <code>include/pto</code> lacks A6.</td></tr>
+          <tr><td><code>ptoas</code> 0.67</td><td>MLIR compiler: <strong>VMI → VPTO → LLVM IR</strong></td></tr>
+          <tr><td><code>ptodsl</code></td><td>Python DSL frontend + runtime (tracing, native build, launch)</td></tr>
+          <tr><td><code>camodel</code> (<code>dav_9201/lib/*.so</code>)</td><td>cycle-accurate sim: <code>libEslTop</code>/<code>libSoC</code>/<code>libUB</code>/<code>libCuberWrapper</code>/<code>libpem_davinci</code> + <code>libruntime_camodel</code></td></tr>
+          <tr><td>ACL stubs (<code>runtime/lib64/stub</code>)</td><td>bridge host <code>aclInit/aclrt*</code> into the camodel</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h2>CCE path — hand-written kernel</h2>
+      <ol class="muted">
+        <li><strong>Source</strong> — <code>cce/a6/VcvtMergeModeKernel/*.cpp</code> uses pto-isa intrinsics inside <code>__VEC_SCOPE__</code>.</li>
+        <li><strong>Compile</strong> — <code>bisheng -xcce --cce-aicore-arch=dav-920r1-vec …</code>. Include order: <code>$PTO_ISA_PATH</code> <em>before</em> <code>$ASCEND_HOME_PATH/include</code>.</li>
+        <li><strong>Link + host</strong> — fatobj + <code>main.cpp</code> (gtest) against <code>libascendcl</code> + <code>libruntime_camodel</code>.</li>
+        <li><strong>Run</strong> — <code>run.sh -r sim -v dav_9201</code> → camodel executes, writes <code>core0.veccore0.instr_log.dump</code>, gtest asserts correctness.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>DSL path — the lowering stack</h2>
+      <div class="table-wrap"><table class="data-table compact">
+        <thead><tr><th>Stage</th><th>Input → Output</th><th>What happens (and the A6 fix that lives here)</th></tr></thead>
+        <tbody>
+          <tr><td><strong>A</strong></td><td>Python → <strong>VMI IR</strong></td><td><code>kernel.compile()</code> AST-rewrites + traces the <code>@pto.jit</code> function into logical vector ops (<code>vmi.vload</code>, <code>vmi.vbrc</code>, <code>vmi.vcvt</code>, <code>mte_load/store</code>, …).</td></tr>
+          <tr><td><strong>B</strong></td><td>VMI → <strong>VPTO IR</strong></td><td><code>VMIToVPTOPass</code> materializes 256-byte physical vectors: <code>vload→vsldb</code>, <code>vbrc→selector ramp (vci&gt;&gt;n)</code>, <code>vcvt→extf+truncf</code> (f32 bridge). <em>Fix #5: <code>vsldb</code> 32-byte-alignment check; power-of-2 remainder → <code>vand</code>.</em></td></tr>
+          <tr><td><strong>C</strong></td><td>VPTO → <strong>LLVM IR</strong></td><td>CANN900 emitter turns each VPTO op into <code>llvm.hivm.*</code> intrinsics. <em>Fix #2 (<code>.V920</code> GM↔UB) and #6 (typed <code>.z</code> shift form).</em></td></tr>
+          <tr><td><strong>D</strong></td><td>LLVM → <strong>fatobj</strong></td><td><code>bisheng</code> SelectionDAG matches each intrinsic to an A6 hardware instruction. “Cannot select” happens here when no pattern exists for <code>dav-920r1-vec</code>.</td></tr>
+          <tr><td><strong>E</strong></td><td>fatobj → <strong>launch .so</strong></td><td>ptodsl generates <code>launch.cpp</code> (<code>kernel&lt;&lt;&lt;grid,…&gt;&gt;&gt;</code>), links with <code>--cce-fatobj-link</code> + <code>-lruntime_camodel</code>; Python host <code>dlopen</code>s it and calls the launch symbol.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <h2>Runtime on the camodel</h2>
+      <pre style="font-size:12px;line-height:1.5;overflow-x:auto">aclInit()               → load libascendcl (stub → camodel)
+aclrtSetDevice(0)       → build SoC model (dies, UB config parse via ub_case_config.xml)
+aclrtMalloc/Memcpy      → device memory (host ↔ GM)
+aclrtLaunchKernel       → send SQE to Stars scheduler → cycles execute
+aclrtSynchronizeStream  → wait → instr_log.dump written
+aclrtResetDevice+aclFinalize → teardown</pre>
+      <p class="muted">Two dav_9201 camodel bugs (CANN's, sidestepped): <strong>(1)</strong> teardown <code>TmSim::reset()</code> — avoided by <code>aclrtResetDevice</code>+<code>aclFinalize</code>; <strong>(2)</strong> <code>SetDevice</code> UB-parser heap corruption — avoided by SetDevice-before-pto-import ordering.</p>
+    </div>
+
+    <div class="card">
+      <h2>Six A6 walls, mapped to stages</h2>
+      <div class="table-wrap"><table class="data-table compact">
+        <thead><tr><th>#</th><th>Wall</th><th>Stage</th><th>Fix</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>stale ptoas rejects <code>a6</code></td><td>env</td><td><code>PTOAS_BIN</code>/venv 0.67</td></tr>
+          <tr><td>2</td><td>A6 march + <code>.V920</code> + bf16→fp8 bridge</td><td>C / D</td><td>ptoas 0.65</td></tr>
+          <tr><td>3</td><td>camodel teardown crash</td><td>runtime</td><td><code>aclrtResetDevice</code>+<code>aclFinalize</code></td></tr>
+          <tr><td>4</td><td>camodel <code>SetDevice</code> UB-parser crash</td><td>runtime</td><td>setdev-before-pto ordering</td></tr>
+          <tr><td>5</td><td><code>vsldb</code> 32-byte alignment</td><td>B</td><td>padded scale (32B/window)</td></tr>
+          <tr><td>6</td><td><code>vshrs</code> “Cannot select”</td><td>C/D</td><td>typed <code>.z</code> intrinsic (0.67)</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">3–4 are CANN's; 2, 5, 6 were PTOAS-side (compiler lowering / emitter / kernel layout).</p>
+    </div>
+  </section>
+</template>
 
 <template id="tpl-overview">
   <section class="view-section">
