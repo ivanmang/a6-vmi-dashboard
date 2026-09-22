@@ -6,6 +6,7 @@
 
 # ---- active ----
 VcvtMergeModeKernel
+AbsReduceMaxKernel
 
 # ---- matched pairs (CCE + DSL both present) — candidates, not yet validated ----
 # ActMinMaxClamp

@@ -100,7 +100,9 @@ discover_one_kernel() {
   # $1 = kernel name. Echoes the chosen py path (empty if none).
   local kernel="$1" dsl_dir="${DSL_DIR}/$1" py=""
   [[ -d "$dsl_dir" ]] || return 0
-  py=$(find "$dsl_dir" -maxdepth 1 -type f \
+  # A6 run needs the setdev-before-pto variant (camodel SetDevice workaround).
+  py=$(find "$dsl_dir" -maxdepth 1 -type f -name "${kernel}_*_setdev_before_pto.py" 2>/dev/null | sort | head -1)
+  [[ -z "$py" ]] && py=$(find "$dsl_dir" -maxdepth 1 -type f \
         \( -name "${kernel}_case0_*.py" -o -name "${kernel}_real_*.py" \) \
         2>/dev/null | sort | head -1)
   echo "$py"
