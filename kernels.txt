@@ -4,7 +4,7 @@
 # Only UNCOMMENTED kernels are run by ops/run_cce.sh and ops/run_vmi.sh.
 # Validate one kernel at a time and uncomment it as it PASSes on dav_9201.
 
-# ---- active ----
+# ---- active — all PASSed on dav_9201 ----
 VcvtMergeModeKernel
 AbsReduceMaxKernel
 

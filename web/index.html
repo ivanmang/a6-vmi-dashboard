@@ -121,7 +121,7 @@ aclrtResetDevice+aclFinalize → teardown</pre>
     </div>
 
     <div class="card">
-      <h2>Six A6 walls, mapped to stages</h2>
+      <h2>Seven A6 walls, mapped to stages</h2>
       <div class="table-wrap"><table class="data-table compact">
         <thead><tr><th>#</th><th>Wall</th><th>Stage</th><th>Fix</th></tr></thead>
         <tbody>
@@ -131,9 +131,10 @@ aclrtResetDevice+aclFinalize → teardown</pre>
           <tr><td>4</td><td>camodel <code>SetDevice</code> UB-parser crash</td><td>runtime</td><td>setdev-before-pto ordering</td></tr>
           <tr><td>5</td><td><code>vsldb</code> 32-byte alignment</td><td>B</td><td>padded scale (32B/window)</td></tr>
           <tr><td>6</td><td><code>vshrs</code> “Cannot select”</td><td>C/D</td><td>typed <code>.z</code> intrinsic (0.67)</td></tr>
+          <tr><td>7</td><td><code>vcgmax</code> wrong group-max (7/8 groups)</td><td>C/D</td><td><code>vcgmaxv2</code>+<code>vpackv2</code> (0.68)</td></tr>
         </tbody>
       </table></div>
-      <p class="muted">3–4 are CANN's; 2, 5, 6 were PTOAS-side (compiler lowering / emitter / kernel layout).</p>
+      <p class="muted">3–4 are CANN's; 2, 5, 6, 7 were PTOAS-side (compiler lowering / emitter / kernel layout).</p>
     </div>
   </section>
 </template>
