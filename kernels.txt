@@ -4,9 +4,25 @@
 # Only UNCOMMENTED kernels are run by ops/run_cce.sh and ops/run_vmi.sh.
 # Validate one kernel at a time and uncomment it as it PASSes on dav_9201.
 
-# ---- active — all PASSed on dav_9201 ----
+# ---- active — PASSed on dav_9201 + newly-added A6 quant·dequant·vcvt kernels ----
 VcvtMergeModeKernel
 AbsReduceMaxKernel
+
+# 2026-09 A6 quant/dequant family (cce/a6/*, cross-arch DSL twins):
+QuantBf16toMXFp8Kernel
+QuantBf16toMXFp8CeilKernel
+QuantFP32toMXFp8Kernel
+QuantFP32toMXFp8CeilKernel
+QuantBf16toMXFp4Kernel
+QuantFP32toMXFp4Kernel
+QuantBf16toNVFp4Kernel
+QuantFP32toNVFp4Kernel
+QuantBf16toMXFp4SquareKernel
+DequantMXFp8Kernel
+VcvtMergeModeFp32Kernel
+
+# CCE-only (no DSL twin yet): HiF4/E1M2 dequant is A6-only (absent on A5).
+DequantHiF4Kernel
 
 # ---- matched pairs (CCE + DSL both present) — candidates, not yet validated ----
 # ActMinMaxClamp

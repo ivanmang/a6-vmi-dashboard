@@ -2,13 +2,13 @@
 # ============================================================================
 # run_cce.sh — Run CCE kernels (matched pairs only) on A6 simulator
 #
-# Only runs the 31 kernels that have matching VMI/DSL counterparts.
+# Only runs the A6 kernels listed (uncommented) in ../kernels.txt.
 # This is the CCE half of the A6 CCE-vs-VMI comparison.
 #
 # Produces: ~/pto-vmi/logs/a6_cce_logs/<Kernel>.<case>/core0.veccore0.instr_log.dump
 #
 # Usage:
-#   bash run_cce.sh                    # run all 31 matched kernels
+#   bash run_cce.sh                    # run all active kernels
 #   bash run_cce.sh -c ActMinMaxClamp  # run one kernel
 #   bash run_cce.sh --list             # list cases
 #   bash run_cce.sh -v                 # verbose (show full sim output)
@@ -54,7 +54,7 @@ while [[ $# -gt 0 ]]; do
       echo "Usage: bash run_cce.sh [-v] [-c KERNEL] [--list]"
       echo "  -v   Verbose: show full cmake+make+sim output"
       echo "  -c   Run only the specified kernel (substring match)"
-      echo "  -l   List the 31 matched kernels and exit"
+      echo "  -l   List the active kernels and exit"
       echo ""
       echo "Only runs kernels with matching VMI/DSL counterparts (${#KERNELS[@]} kernels)."
       exit 0 ;;
@@ -126,6 +126,33 @@ done
 pass "Patched $PATCHED CMakeLists.txt files"
 
 # ── Run each case ───────────────────────────────────────────────────────────
+# Run a CCE kernel that ships run_camodel.py instead of run.sh (the A6
+# quant/dequant kernels): build the exe via CMakeLists (march is hardcoded
+# dav-920r1-vec in those kernels) then launch it through run_camodel.py, which
+# fixes LD_LIBRARY_PATH for camodel-only hosts. Returns the exe's exit code.
+run_camodel_one() {
+  local kdir="$1" case_name="$2" build_dir="$3"
+  local exe=""
+  exe=$(grep -oE 'pto_vec_st\([a-z0-9_]+\)' "${kdir}/CMakeLists.txt" 2>/dev/null \
+        | head -1 | sed 's/pto_vec_st(//; s/)//')
+  [[ -n "$exe" ]] || exe="$(basename "$kdir" | tr 'A-Z' 'a-z')"
+
+  rm -rf "$build_dir"; mkdir -p "$build_dir"
+  if ! ( cd "$build_dir" && cmake -DRUN_MODE="${RUN_MODE}" -DSOC_VERSION="${SOC_VERSION}" .. \
+           && make -j16 ) 2>&1; then
+    return 2
+  fi
+
+  if [[ -f "${kdir}/gen_data.py" ]]; then
+    ( cd "$build_dir" && python3 ../gen_data.py ) 2>&1 || true
+  fi
+
+  local extra_args=(--npu="$NPU_ID")
+  [[ -n "$case_name" ]] && extra_args+=(--gtest_filter="*${case_name}*")
+
+  timeout "$PER_CASE_TIMEOUT" python3 "${kdir}/run_camodel.py" "$build_dir" "$exe" "${extra_args[@]}"
+}
+
 hdr "Run CCE kernels on A6 simulator"
 
 mkdir -p "${LOG_ROOT}"
@@ -153,19 +180,34 @@ for i in "${!CASES[@]}"; do
   printf "  │ ${CYAN}[%d/%d]%3d%%${NC} %-40s " "$idx" "$TOTAL" "$pct" "$case_id"
 
   run_sh="${kdir}/run.sh"
+  run_camodel="${kdir}/run_camodel.py"
   case_log_dir="${LOG_ROOT}/${case_id}"
   mkdir -p "$case_log_dir"
   case_log="${case_log_dir}/run.log"
 
+  use_camodel=0
   if [[ ! -f "$run_sh" ]]; then
-    echo -e "${RED}SKIP${NC} (no run.sh)"
-    FAIL=$((FAIL+1)); FAILED_CASES+=("${case_id} (no run.sh)")
-    continue
+    if [[ -f "$run_camodel" ]]; then
+      use_camodel=1
+    else
+      echo -e "${RED}SKIP${NC} (no run.sh / run_camodel.py)"
+      FAIL=$((FAIL+1)); FAILED_CASES+=("${case_id} (no runner)")
+      continue
+    fi
   fi
 
   rc=0
   case_start=$SECONDS
-  if [[ $VERBOSE -eq 1 ]]; then
+  if [[ $use_camodel -eq 1 ]]; then
+    if [[ $VERBOSE -eq 1 ]]; then
+      echo "│"
+      run_camodel_one "$kdir" "$case_name" "${kdir}/build" 2>&1 | sed 's/^/  │   /'
+      rc=${PIPESTATUS[0]}
+    else
+      run_camodel_one "$kdir" "$case_name" "${kdir}/build" > "$case_log" 2>&1
+      rc=$?
+    fi
+  elif [[ $VERBOSE -eq 1 ]]; then
     echo "│"
     (cd "$kdir" && timeout "$PER_CASE_TIMEOUT" bash "$run_sh" \
       -r "$RUN_MODE" -v "$SOC_VERSION" -n "$NPU_ID" -c "$case_name" 2>&1) | sed 's/^/  │   /'
@@ -186,6 +228,7 @@ for i in "${!CASES[@]}"; do
   for dump_path in \
     "${build_dir}/log_ca/core0.veccore0.instr_log.dump" \
     "${build_dir}/bin/camodel_log/core0.veccore0.instr_log.dump" \
+    "${build_dir}/camodel_log/core0.veccore0.instr_log.dump" \
     "${build_dir}/core0.veccore0.instr_log.dump" \
     "${build_dir}/log_ca/core0.vector_core0.instr_log.dump" \
     "${build_dir}/bin/camodel_log/core0.vector_core0.instr_log.dump"

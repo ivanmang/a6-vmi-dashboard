@@ -187,6 +187,9 @@ else
   export PTO_ISA_PATH=""
 fi
 
+# Cross-arch DSL kernels read os.environ.get("PTO_TARGET", "a5") — force A6.
+export PTO_TARGET="${PTO_TARGET:-a6}"
+
 # ── Python venv (ptoas + ptodsl, for VMI/DSL) ──────────────────────────────
 # Auto-detect: try .venv-ptoas first (Python 3.12 + ptoas 0.64, accepts a6),
 # then .venv-ptoas310 / .venv-ptoas312.

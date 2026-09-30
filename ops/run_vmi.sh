@@ -5,17 +5,17 @@
 # Phase 1: dynamic discovery. By default runs ALL runnable VMI/DSL kernels in
 # ~/pto-vmi/dsl/ (one case0/real file per kernel → kernel-only log dirs, which
 # is what cce_vmi_ca_report.py expects). Use --matched to run only the subset
-# that has CCE counterparts (the legacy 31).
+# that has CCE counterparts (see ../kernels.txt).
 #
 # Produces: ~/pto-vmi/logs/a6_vmi_logs/<Kernel>/core0.veccore0.instr_log.dump
 #           ~/pto-vmi/logs/a6_vmi_logs/_manifest.tsv   (per-case triage table)
 #
 # Usage:
 #   bash run_vmi.sh                       # run ALL ~153 kernels (default)
-#   bash run_vmi.sh --matched            # run only the 31 matched kernels
+#   bash run_vmi.sh --matched            # run only the kernels listed in kernels.txt
 #   bash run_vmi.sh -c ActMinMaxClamp    # run one kernel (substring match)
 #   bash run_vmi.sh --list               # list discovered cases and exit
-#   bash run_vmi.sh --list --matched     # list the 31 matched only
+#   bash run_vmi.sh --list --matched     # list the matched kernels only
 #   bash run_vmi.sh -v                   # verbose (show full sim output)
 #   bash run_vmi.sh --resume             # skip cases already PASS (restart safely)
 #   bash run_vmi.sh --retry-failed       # re-run only non-PASS cases (after a patch)
@@ -74,7 +74,7 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "  --demo         Run ONLY the ~52 demo kernels (docs/demo_kernels.md) [DEFAULT]"
       echo "  --all          Run ALL runnable VMI/DSL kernels (~157)"
-      echo "  --matched      Run the 31 legacy matched kernels (CCE counterparts)"
+      echo "  --matched      Run the kernels listed in kernels.txt (CCE counterparts)"
       echo "  -v             Verbose: show full sim output"
       echo "  -c KERNEL      Run only the specified kernel (substring match)"
       echo "  -l, --list     List discovered cases and exit"
