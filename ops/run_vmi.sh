@@ -441,7 +441,7 @@ echo ""
 if [[ $PASS -gt 0 ]]; then
   pass "Dumps collected at: $LOG_ROOT"
   pass "Manifest: $MANIFEST  (Phase 2 triage: cut -f1,3,5,6 \"$MANIFEST\" | column -t)"
-  info "Next: build dashboard  →  bash $SCRIPT_DIR/a6_build_dashboard.sh --serve"
+  info "Next: build dashboard  →  bash $SCRIPT_DIR/../build_dashboard.sh --serve"
 fi
 
 # ── Restore VMI Python files: target="a6" → target="a5" ────────────────────
