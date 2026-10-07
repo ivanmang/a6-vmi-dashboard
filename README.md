@@ -43,9 +43,16 @@ cd ~/a6-vmi-dashboard && bash build_dashboard.sh --serve
 
 ## Status
 
-- CCE `VcvtMergeModeKernel` on A6 → **PASS** (642 EX, IPC 2.194, 457 cycles)
-- DSL `VcvtMergeModeKernel` on A6 → **PASS** (1158 EX, IPC 1.486, 1185 cycles) —
-  the pre-merge-mode-optimization gap the case is designed to expose.
+- **CCE** (dav_9201): 16 cases — the quant/dequant/vcvt family PASSes (11 quant +
+  VcvtMergeMode + AbsReduceMax); 3 documented non-blockers: `DequantMXFp8Kernel`
+  (UNPK4_B8 camodel layout mismatch, cycle counts valid), `VcvtMergeModeFp32Kernel`
+  (A6 compile-gated), `DequantHiF4Kernel` (provisional golden).
+- **DSL** (dav_9201): **13/13 PASS** — VcvtMergeMode, AbsReduceMax,
+  QuantBf16toMXFp8(+Ceil), QuantFP32toMXFp8(+Ceil), QuantBf16toMXFp4,
+  QuantFP32toMXFp4, QuantBf16toNVFp4, QuantFP32toNVFp4, QuantBf16toMXFp4Square,
+  DequantMXFp8, VcvtMergeModeFp32.
+- **ptoas 0.70** (was 0.67/0.68 at bring-up) — adds the A6 `.z` shift
+  scalar-width fix for the u32 quant exponent shifts.
 - The dav_9201 camodel bugs (teardown + UB-parser) are sidestepped, not fixed;
   full diagnosis + reproduction in `docs/cann-a6-camodel-bug-report.md`.
 

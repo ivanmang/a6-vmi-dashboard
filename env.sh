@@ -191,7 +191,7 @@ fi
 export PTO_TARGET="${PTO_TARGET:-a6}"
 
 # ── Python venv (ptoas + ptodsl, for VMI/DSL) ──────────────────────────────
-# Auto-detect: try .venv-ptoas first (Python 3.12 + ptoas 0.64, accepts a6),
+# Auto-detect: try .venv-ptoas first (Python 3.12 + ptoas 0.69+, accepts a6),
 # then .venv-ptoas310 / .venv-ptoas312.
 if [[ -z "${PTO_VENV:-}" ]]; then
   for venv in "$HOME/.venv-ptoas" "$HOME/.venv-ptoas310" "$HOME/.venv-ptoas312"; do

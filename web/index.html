@@ -32,7 +32,7 @@
   </nav>
   <div class="version-bar">
     <label class="ver-lbl">pto-as version:</label>
-    <span class="muted small" id="ver-info"><strong>ptoas 0.67</strong> · CANN 9.1.0 · dav_9201 (A6)</span>
+    <span class="muted small" id="ver-info"><strong>ptoas 0.70</strong> · CANN 9.1.0 · dav_9201 (A6)</span>
     <span id="run-pill" class="run-pill" hidden></span>
   </div>
 </header>
@@ -77,7 +77,7 @@ vcvt_merge_mode_kernel.cpp          *.py  (@pto.jit + pto.vmi.*)
         <tbody>
           <tr><td><code>bisheng</code> (CANN 9.1.0)</td><td>LLVM/clang C++ + A6 device compiler (<code>--cce-aicore-arch=dav-920r1-vec</code>)</td></tr>
           <tr><td><code>pto-isa</code></td><td>A6 ISA headers — <code>pto-inst.hpp</code> + <code>arch_macro.hpp</code> (<code>__NPU_ARCH__==9201 → PTO_NPU_ARCH_A6</code>). CANN 9.1.0's own <code>include/pto</code> lacks A6.</td></tr>
-          <tr><td><code>ptoas</code> 0.67</td><td>MLIR compiler: <strong>VMI → VPTO → LLVM IR</strong></td></tr>
+          <tr><td><code>ptoas</code> 0.70</td><td>MLIR compiler: <strong>VMI → VPTO → LLVM IR</strong></td></tr>
           <tr><td><code>ptodsl</code></td><td>Python DSL frontend + runtime (tracing, native build, launch)</td></tr>
           <tr><td><code>camodel</code> (<code>dav_9201/lib/*.so</code>)</td><td>cycle-accurate sim: <code>libEslTop</code>/<code>libSoC</code>/<code>libUB</code>/<code>libCuberWrapper</code>/<code>libpem_davinci</code> + <code>libruntime_camodel</code></td></tr>
           <tr><td>ACL stubs (<code>runtime/lib64/stub</code>)</td><td>bridge host <code>aclInit/aclrt*</code> into the camodel</td></tr>
@@ -121,7 +121,7 @@ aclrtResetDevice+aclFinalize → teardown</pre>
     </div>
 
     <div class="card">
-      <h2>Seven A6 walls, mapped to stages</h2>
+      <h2>Eight A6 walls, mapped to stages</h2>
       <div class="table-wrap"><table class="data-table compact">
         <thead><tr><th>#</th><th>Wall</th><th>Stage</th><th>Fix</th></tr></thead>
         <tbody>
@@ -132,9 +132,10 @@ aclrtResetDevice+aclFinalize → teardown</pre>
           <tr><td>5</td><td><code>vsldb</code> 32-byte alignment</td><td>B</td><td>padded scale (32B/window)</td></tr>
           <tr><td>6</td><td><code>vshrs</code> “Cannot select”</td><td>C/D</td><td>typed <code>.z</code> intrinsic (0.67)</td></tr>
           <tr><td>7</td><td><code>vcgmax</code> wrong group-max (7/8 groups)</td><td>C/D</td><td><code>vcgmaxv2</code>+<code>vpackv2</code> (0.68)</td></tr>
+          <tr><td>8</td><td><code>vshrs/vshls .z</code> scalar-width (u32 shift needs i32, ptoas emitted i16)</td><td>C</td><td>widen shift amount to element width (0.70)</td></tr>
         </tbody>
       </table></div>
-      <p class="muted">3–4 are CANN's; 2, 5, 6, 7 were PTOAS-side (compiler lowering / emitter / kernel layout).</p>
+      <p class="muted">3–4 are CANN's; 2, 5, 6, 7, 8 were PTOAS-side (compiler lowering / emitter / kernel layout).</p>
     </div>
   </section>
 </template>

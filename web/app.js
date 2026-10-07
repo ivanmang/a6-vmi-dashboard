@@ -42,6 +42,11 @@ function initFooter(){
   set("ft-commit", META.pto_vmi_short_commit || META.pto_vmi_commit || "main");
   set("ft-ptoas", META.ptoas_version || "PTOAS");
   set("ft-cann", META.cann_version || "CANN");
+  // header version bar (was static "ptoas 0.67"; keep it in sync with the
+  // auto-detected META so a ptoas upgrade can't leave a stale label)
+  var vi = document.getElementById("ver-info");
+  if (vi) vi.innerHTML = "<strong>" + (META.ptoas_version || "ptoas") + "</strong>\u00a0· " +
+    (META.cann_version || "CANN") + " · dav_9201 (A6)";
 }
 initFooter();
 // Raw Report is now a footer link (no tab) — renders the markdown into the view
