@@ -810,7 +810,7 @@ VIEWS.excluded = function(){
   // Section 1b: §0b Toolchain bug (ptoas/simulator) — card layout
   if(bugExcl.length){
     html += '<h3>§0b — Toolchain Bug (ptoas/simulator) ('+bugExcl.length+')</h3>';
-    html += '<p class="muted small">These pairs pass correctness but the simulated instruction stream is not representative of real hardware — a ptoas lowering bug mangles the loop structure (e.g. <code>pto.static_range()</code> is fully unrolled into SLDI/SSTI scalar ops instead of a hardware loop). Excluded from all comparisons pending a ptoas fix.</p>';
+    html += '<p class="muted small">These pairs are blocked by a toolchain/simulator limitation — a ptoas lowering bug, a camodel layout mismatch, or a compile-gated CCE port — so their instruction stream is missing or not representative of real hardware. Excluded from all comparisons pending a toolchain fix.</p>';
     html += '<div class="licm-cards">';
     bugExcl.forEach(function(r){
       var c=r.cce, v=r.vmi;
@@ -835,7 +835,7 @@ VIEWS.excluded = function(){
   }
   // Section 1: §0c Semantic Divergence (excluded pairs) — card layout
   html += '<h3>§0c — Semantic Divergence ('+semanticExcl.length+')</h3>';
-  html += '<p class="muted small">These pairs are excluded because CCE and VMI do different work (different inputs, different algorithm, or different work fraction). They are NOT valid performance comparisons.</p>';
+  html += '<p class="muted small">These pairs are excluded because CCE and VMI do not align on semantics — different inputs / algorithm / work fraction, an unfinalized (provisional) golden, or a CCE-only case. They are NOT valid performance comparisons.</p>';
   if(semanticExcl.length){
     html += '<div class="licm-cards">';
     semanticExcl.forEach(function(r){
