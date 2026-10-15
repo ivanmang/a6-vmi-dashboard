@@ -5278,6 +5278,12 @@ VIEWS.compare = function(){
   });
   rows.sort(function(a,b){ return a.kernel<b.kernel?-1:(a.kernel>b.kernel?1:0); });
 
+  // A6-excluded rows (correctness/compile-gated/camodel-bug) — dropped from the
+  // join, but list them so the tab reconciles with the §0a/§0b/§0c excluded view.
+  var a6Excluded = ROWS.filter(function(r){ return !!r.excluded; }).map(function(r){
+    return {kernel: r.kernel, cce: r.cce_status || "FAIL", vmi: r.vmi_status || "N/A"};
+  });
+
   el("cmp-cross-n").textContent = "("+rows.length+" shared)";
   var pn = el("cmp-pairs-n"); if(pn) pn.textContent = "("+rows.length+")";
   var diag = el("cmp-cross-diag");
@@ -5285,7 +5291,7 @@ VIEWS.compare = function(){
     diag.textContent = "A6 dashboard rows: " + ROWS.length + " · A5 snapshot rows: " + A5.length +
       " · shared: " + rows.length + " · A6-only: " + a6Only.length + " · A5-only: " + a5Only.length;
   }
-  renderCrossNotes(a6Only, a5Only, a5Excluded, rows);
+  renderCrossNotes(a6Only, a5Only, a5Excluded, rows, a6Excluded);
   renderSimdTables();
 
   if(!A5.length){
@@ -5344,10 +5350,16 @@ VIEWS.compare = function(){
   draw();
 };
 
-function renderCrossNotes(a6Only, a5Only, a5Excluded, rows){
+function renderCrossNotes(a6Only, a5Only, a5Excluded, rows, a6Excluded){
   var host = el("cmp-cross-notes"); if(!host) return;
   var html = "";
   var exclShared = rows.filter(function(r){ return a5Excluded[r.kernel]; }).map(function(r){ return r.kernel; });
+  if(a6Excluded.length){
+    html += '<h3>A6-excluded kernels <span class="muted small">('+a6Excluded.length+', not compared — CCE correctness/compile-gate)</span></h3>'+
+      '<p class="muted small">'+a6Excluded.map(function(x){
+        return esc(x.kernel)+' <span class="muted">(CCE '+esc(x.cce)+', VMI '+esc(x.vmi)+')</span>';
+      }).join(' · ')+'</p>';
+  }
   if(exclShared.length){
     html += '<h3>⚠ A5-excluded shared kernels <span class="muted small">('+exclShared.length+', CCE FAIL on A5 — CCE columns show —, VMI still compared)</span></h3>'+
       '<p class="muted small">'+exclShared.map(esc).join(' · ')+'</p>';
