@@ -5446,8 +5446,10 @@ function drawCrossScatter(data, mk, side){
   s+='<line class="diag" x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+pad+'"/>';
   pts.forEach(function(p){
     var d = p.a5===0 ? null : (p.a6-p.a5)/p.a5*100;
-    var tip = esc(p.kernel)+' · '+p.side+' | A5='+fmt(p.a5, p.a5%1===0?0:3)+', A6='+fmt(p.a6, p.a6%1===0?0:3)+(d==null?'':' | Δ'+(d>0?'+':'')+d.toFixed(1)+'%');
-    s+='<g class="pt" data-kernel="'+attrEsc(p.kernel)+'" style="cursor:pointer"><title>'+tip+'</title>'+
+    var tip = '<b>'+esc(p.kernel)+'</b> · '+p.side+'<br>'+
+      'A5 '+fmt(p.a5, p.a5%1===0?0:3)+' → A6 '+fmt(p.a6, p.a6%1===0?0:3)+
+      (d==null?'':'<br>Δ '+(d>0?'+':'')+d.toFixed(1)+'%');
+    s+='<g class="pt" data-kernel="'+attrEsc(p.kernel)+'" data-tip="'+attrEsc(tip)+'">'+
        '<circle cx="'+sx(p.a5)+'" cy="'+sy(p.a6)+'" r="4.5" fill="'+p.color+'" opacity="0.85"/></g>';
   });
   s+='<text class="axis-title" x="'+(W/2)+'" y="'+(H-10)+'" text-anchor="middle">A5 '+esc(mk.label)+'</text>';
@@ -5457,6 +5459,8 @@ function drawCrossScatter(data, mk, side){
   s+='</g>';
   s+='</svg>';
   host.innerHTML = s;
+
+  addScatterHover(host);
 
   // click a point → highlight its table row
   host.querySelectorAll(".pt").forEach(function(pt){
@@ -5534,6 +5538,37 @@ function renderSimdTables(){
   var simd = (R && R.a5a6_simd) || null;
   renderSimdTable("cmp-quant-table", "cmp-quant-note", "cmp-quant-n", simd && simd.quant);
   renderSimdTable("cmp-dequant-table", "cmp-dequant-note", "cmp-dequant-n", simd && simd.dequant);
+}
+
+/* ---- shared scatter hover tooltip ---- */
+function addScatterHover(host){
+  if(!host) return;
+  host.style.position = "relative";
+  var tip = host.querySelector(".scatter-tip");
+  if(!tip){ tip = document.createElement("div"); tip.className = "scatter-tip"; host.appendChild(tip); }
+  var hideT = null;
+  function show(pt){
+    if(hideT){ clearTimeout(hideT); hideT = null; }
+    tip.innerHTML = '<div class="st-line">' + (pt.getAttribute("data-tip") || "") + '</div>';
+    tip.classList.add("show");
+    var rect = host.getBoundingClientRect(), pr = pt.getBoundingClientRect();
+    var left = pr.left - rect.left + 12, top = pr.top - rect.top - 6;
+    if(left + 230 > host.offsetWidth) left = pr.left - rect.left - 230;
+    if(top < 4) top = pr.bottom - rect.top + 8;
+    if(top > host.offsetHeight - 100) top = pr.top - rect.top - 110;
+    tip.style.left = left + "px"; tip.style.top = top + "px";
+  }
+  function scheduleHide(){
+    if(hideT){ clearTimeout(hideT); }
+    hideT = setTimeout(function(){ tip.classList.remove("show"); }, 250);
+  }
+  host.querySelectorAll(".pt").forEach(function(pt){
+    pt.style.cursor = "pointer";
+    pt.addEventListener("mouseenter", function(){ show(pt); });
+    pt.addEventListener("mouseleave", scheduleHide);
+  });
+  tip.addEventListener("mouseenter", function(){ if(hideT){ clearTimeout(hideT); hideT = null; } });
+  tip.addEventListener("mouseleave", scheduleHide);
 }
 
 /* ---- A5↔A6 Overview (README headline distilled) ---- */
@@ -5626,7 +5661,9 @@ function renderOverviewScatter(q, dq){
     var name = t[0], rows = t[1], col = t[2];
     groupSimdRows(rows).forEach(function(g){
       if(g.a5 && g.a6 && g.a5.simd != null && g.a6.simd != null){
-        pts.push({label: g.kernel + " " + g.case, family: name, color: col, a5: g.a5.simd, a6: g.a6.simd, delta: g.a5.delta});
+        pts.push({label: g.kernel + " " + g.case, family: name, color: col,
+                  a5: g.a5.simd, a6: g.a6.simd, delta: g.a5.delta,
+                  ipcA5: g.a5.ipc, ipcA6: g.a6.ipc, ecA5: g.a5.ec, ecA6: g.a6.ec});
       }
     });
   });
@@ -5641,8 +5678,12 @@ function renderOverviewScatter(q, dq){
   s += '<g class="axis"><line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'"/><line x1="'+pad+'" y1="'+pad+'" x2="'+pad+'" y2="'+(H-pad)+'"/></g>';
   s += '<line class="diag" x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+pad+'"/>';
   pts.forEach(function(p){
-    var tip = esc(p.label) + ' · ' + p.family + ' | A5=' + p.a5 + ', A6=' + p.a6 + (p.delta != null ? ' | Δ' + simdDeltaStr(p.delta) : '');
-    s += '<g class="pt" style="cursor:default"><title>'+tip+'</title><circle cx="'+sx(p.a5)+'" cy="'+sy(p.a6)+'" r="4.5" fill="'+p.color+'" opacity="0.85"/></g>';
+    var tip = '<b>'+esc(p.label)+'</b> · '+p.family+'<br>'+
+      'A5 <b>'+p.a5+'</b> → A6 <b>'+p.a6+'</b> cycles'+
+      (p.delta != null ? '<br>Δ SIMD '+simdDeltaStr(p.delta) : '')+
+      (p.ipcA5 != null && p.ipcA6 != null ? '<br>EXU IPC '+fmt(p.ipcA5,2)+' → '+fmt(p.ipcA6,2) : '')+
+      (p.ecA5 != null && p.ecA6 != null ? ' · E/C '+fmt(p.ecA5,2)+' → '+fmt(p.ecA6,2) : '');
+    s += '<g class="pt" data-tip="'+attrEsc(tip)+'"><circle cx="'+sx(p.a5)+'" cy="'+sy(p.a6)+'" r="4.5" fill="'+p.color+'" opacity="0.85"/></g>';
   });
   s += '<text class="axis-title" x="'+(W/2)+'" y="'+(H-10)+'" text-anchor="middle">A5 SIMD cycles</text>';
   s += '<text class="axis-title" transform="rotate(-90 14 '+Math.round(H/2)+')" x="14" y="'+Math.round(H/2)+'" text-anchor="middle">A6 SIMD cycles</text>';
@@ -5651,6 +5692,7 @@ function renderOverviewScatter(q, dq){
   s += '</g>';
   s += '</svg>';
   host.innerHTML = s;
+  addScatterHover(host);
 }
 
 VIEWS.versions = function(){
