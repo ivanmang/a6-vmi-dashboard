@@ -5216,6 +5216,235 @@ function updateRunPanel(s){
     }).catch(function(){});
   }
 }
+/* ---------------- A5↔A6 COMPARE ---------------- */
+var CROSS_METRIC = "vf_real";
+var CROSS_SIDE = "both";
+var CROSS_SORT = "adelta";
+var CROSS_SEARCH = "";
+
+var CROSS_LABEL = {
+  vf_real: {key: "vf_real", label: "vf_real (cycles)", short: "cyc", betterLow: true},
+  ipc:     {key: "ipc",     label: "IPC",              short: "IPC", betterLow: false},
+  ex_ipc:  {key: "ex_ipc",  label: "EX-IPC",           short: "EX-IPC", betterLow: false},
+  ex:      {key: "ex",      label: "EX count",         short: "EX", betterLow: true}
+};
+
+VIEWS.compare = function(){
+  var A5 = (R.a5 && R.a5.rows) || [];
+  var A5META = (R.a5 && R.a5.meta) || {};
+  var metricSel = el("cmp-cross-metric");
+  var sideSel = el("cmp-cross-side");
+  var sortSel = el("cmp-cross-sort");
+  var search = el("cmp-cross-search");
+  var table = el("cmp-cross-table");
+  var chart = el("cmp-cross-scatter");
+
+  // provenance line
+  var am = el("cmp-cross-a5meta");
+  if(am){
+    var bd = A5META.build_date || "?";
+    var cv = A5META.pto_vmi_short_commit || A5META.pto_vmi_commit || "?";
+    var pv = A5META.ptoas_version || "?";
+    am.textContent = "A5 · " + bd + " · pto-vmi " + cv + " · " + pv;
+  }
+
+  // index A5 rows by kernel (excluded rows are KEPT — their exclusion is almost
+  // always "CCE=FAIL on A5", which leaves the VMI side trustworthy, and per-side
+  // null handling below skips any missing metric anyway).
+  var a5ByKernel = {};
+  var a5Excluded = {};
+  A5.forEach(function(r){
+    if(!r || !r.kernel) return;
+    a5ByKernel[r.kernel] = r;
+    if(r.excluded) a5Excluded[r.kernel] = true;
+  });
+
+  var rows = [], a6Only = [], a5Only = [];
+  var a6Seen = {};
+  ROWS.forEach(function(r){
+    a6Seen[r.kernel] = true;
+    var a5 = a5ByKernel[r.kernel];
+    if(a5) rows.push({kernel: r.kernel, a6: r, a5: a5});
+    else if(!r.excluded) a6Only.push(r.kernel);
+  });
+  A5.forEach(function(r){
+    if(r.kernel && !a6Seen[r.kernel]) a5Only.push(r.kernel);
+  });
+  rows.sort(function(a,b){ return a.kernel<b.kernel?-1:(a.kernel>b.kernel?1:0); });
+
+  el("cmp-cross-n").textContent = "("+rows.length+" shared)";
+  renderCrossNotes(a6Only, a5Only, a5Excluded, rows);
+
+  if(!A5.length){
+    table.innerHTML = '<p class="empty-state">No A5 snapshot embedded — run <code>scripts/build_a5_snapshot.py</code> then <code>scripts/build_data.py</code> on the A5 side and re-pull.</p>';
+    chart.innerHTML = '';
+    return;
+  }
+  if(!rows.length){
+    table.innerHTML = '<p class="empty-state">No shared kernels between the A6 dashboard and the A5 snapshot.</p>';
+    chart.innerHTML = '';
+    return;
+  }
+
+  function sideOf(side, r){
+    if(side==="cce"){ return {a5: r.a5.cce, a6: r.a6.cce, name:"CCE", color:"var(--cce)"}; }
+    if(side==="vmi"){ return {a5: r.a5.vmi, a6: r.a6.vmi, name:"VMI", color:"var(--vmi)"}; }
+    // both → prefer CCE, fall back VMI
+    if(r.a5.cce && r.a6.cce) return {a5: r.a5.cce, a6: r.a6.cce, name:"CCE", color:"var(--cce)"};
+    return {a5: r.a5.vmi, a6: r.a6.vmi, name:"VMI", color:"var(--vmi)"};
+  }
+  function val(s, k){ return (s && s[k] != null && isFinite(s[k])) ? s[k] : null; }
+  function dpct(a5v, a6v){
+    if(a5v==null || a6v==null || a5v===0) return null;
+    return (a6v - a5v) / a5v * 100;
+  }
+
+  function draw(){
+    var mk = CROSS_LABEL[CROSS_METRIC] || CROSS_LABEL.vf_real;
+    var side = CROSS_SIDE;
+    var q = CROSS_SEARCH;
+    var data = rows.filter(function(r){ return !q || r.kernel.toLowerCase().indexOf(q)>=0; });
+
+    // sort
+    data.sort(function(a,b){
+      if(CROSS_SORT==="kernel") return a.kernel<b.kernel?-1:(a.kernel>b.kernel?1:0);
+      var sa = sideOf(side,a), sb = sideOf(side,b);
+      var a5a=val(sa.a5,mk.key), a6a=val(sa.a6,mk.key), a5b=val(sb.a5,mk.key), a6b=val(sb.a6,mk.key);
+      if(CROSS_SORT==="a6best"){
+        var va = (a6a==null?Infinity:a6a), vb = (a6b==null?Infinity:a6b);
+        return mk.betterLow ? va-vb : vb-va;
+      }
+      // adelta: A6 best first
+      var da=dpct(a5a,a6a), db=dpct(a5b,a6b);
+      if(da==null && db==null) return 0;
+      if(da==null) return 1; if(db==null) return -1;
+      return mk.betterLow ? da-db : db-da;
+    });
+
+    drawCrossTable(data, mk, side);
+    drawCrossScatter(data, mk, side);
+  }
+  metricSel.onchange = function(){ CROSS_METRIC = metricSel.value; draw(); };
+  sideSel.onchange = function(){ CROSS_SIDE = sideSel.value; draw(); };
+  sortSel.onchange = function(){ CROSS_SORT = sortSel.value; draw(); };
+  search.oninput = function(){ CROSS_SEARCH = search.value.trim().toLowerCase(); draw(); };
+  draw();
+};
+
+function renderCrossNotes(a6Only, a5Only, a5Excluded, rows){
+  var host = el("cmp-cross-notes"); if(!host) return;
+  var html = "";
+  var exclShared = rows.filter(function(r){ return a5Excluded[r.kernel]; }).map(function(r){ return r.kernel; });
+  if(exclShared.length){
+    html += '<h3>⚠ A5-excluded shared kernels <span class="muted small">('+exclShared.length+', CCE FAIL on A5 — CCE columns show —, VMI still compared)</span></h3>'+
+      '<p class="muted small">'+exclShared.map(esc).join(' · ')+'</p>';
+  }
+  if(a6Only.length){
+    html += '<h3>A6-only kernels <span class="muted small">('+a6Only.length+', no A5 counterpart in the snapshot)</span></h3>'+
+      '<p class="muted small">'+a6Only.map(esc).join(' · ')+'</p>';
+  }
+  if(a5Only.length){
+    html += '<h3>A5-only kernels <span class="muted small">('+a5Only.length+', not run on A6 yet)</span></h3>'+
+      '<p class="muted small">'+a5Only.map(esc).join(' · ')+'</p>';
+  }
+  if(!exclShared.length && !a6Only.length && !a5Only.length){
+    html = '<p class="muted small">Every kernel in the A5 snapshot has an A6 counterpart, and vice-versa.</p>';
+  }
+  host.innerHTML = html;
+}
+
+function drawCrossTable(data, mk, side){
+  var table = el("cmp-cross-table"); if(!table) return;
+  var showC = side!=="vmi", showV = side!=="cce";
+  var heads = ['<th class="kernel">kernel</th>'];
+  if(showC) heads.push('<th class="cce">A5 CCE</th><th class="cce">A6 CCE</th><th class="sep">Δ% CCE</th>');
+  if(showV) heads.push('<th class="vmi">A5 VMI</th><th class="vmi">A6 VMI</th><th class="sep">Δ% VMI</th>');
+  var html = '<thead><tr>'+heads.join('')+'</tr></thead><tbody>';
+
+  data.forEach(function(r){
+    html += '<tr data-kernel="'+attrEsc(r.kernel)+'">'+
+      '<td class="kernel">'+esc(r.kernel)+'</td>';
+    if(showC) html += crossCells(r.a5.cce, r.a6.cce, mk);
+    if(showV) html += crossCells(r.a5.vmi, r.a6.vmi, mk);
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+function crossGood(betterLow, delta){
+  if(delta==null) return "a6-flat";
+  if(Math.abs(delta) < 0.5) return "a6-flat";
+  return (betterLow ? delta<0 : delta>0) ? "a6-good" : "a6-bad";
+}
+
+function crossCells(a5s, a6s, mk){
+  var a5v = (a5s && a5s[mk.key] != null && isFinite(a5s[mk.key])) ? a5s[mk.key] : null;
+  var a6v = (a6s && a6s[mk.key] != null && isFinite(a6s[mk.key])) ? a6s[mk.key] : null;
+  var d = (a5v==null || a6v==null || a5v===0) ? null : (a6v-a5v)/a5v*100;
+  var dec = function(v){ return (v!=null && v%1===0) ? 0 : 3; };
+  var ds = d==null ? "—" : (d>0?"+":"")+d.toFixed(1)+"%";
+  return '<td class="num">'+fmt(a5v, a5v==null?0:dec(a5v))+'</td>'+
+         '<td class="num" style="font-weight:600">'+fmt(a6v, a6v==null?0:dec(a6v))+'</td>'+
+         '<td class="num sep '+crossGood(mk.betterLow, d)+'">'+ds+'</td>';
+}
+
+function drawCrossScatter(data, mk, side){
+  var host = el("cmp-cross-scatter"); if(!host) return;
+  var pts = [];
+  data.forEach(function(r){
+    if(side!=="vmi"){
+      var a5c=(r.a5.cce&&r.a5.cce[mk.key]), a6c=(r.a6.cce&&r.a6.cce[mk.key]);
+      if(a5c!=null && a6c!=null && isFinite(a5c) && isFinite(a6c)) pts.push({kernel:r.kernel, side:"CCE", color:"var(--cce)", a5:a5c, a6:a6c});
+    }
+    if(side!=="cce"){
+      var a5v=(r.a5.vmi&&r.a5.vmi[mk.key]), a6v=(r.a6.vmi&&r.a6.vmi[mk.key]);
+      if(a5v!=null && a6v!=null && isFinite(a5v) && isFinite(a6v)) pts.push({kernel:r.kernel, side:"VMI", color:"var(--vmi)", a5:a5v, a6:a6v});
+    }
+  });
+  if(!pts.length){ host.innerHTML='<p class="empty-state">no data</p>'; return; }
+
+  var W=520, H=380, pad=46;
+  var all = [];
+  pts.forEach(function(p){ all.push(p.a5, p.a6); });
+  var max = Math.max.apply(null, all) * 1.12 || 1;
+  if(mk.key==="ipc" || mk.key==="ex_ipc") max = Math.max(max, 1.6);
+  var min = 0;
+  var sx=function(x){ return pad+(x-min)/(max-min)*(W-pad-pad); };
+  var sy=function(y){ return H-pad-(y-min)/(max-min)*(H-pad-pad); };
+
+  var s = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'">';
+  var g;
+  for(g=0; g<=4; g++){ var gv=min+(max-min)*g/4; s+='<g class="grid"><line x1="'+pad+'" x2="'+(W-pad)+'" y1="'+sy(gv)+'" y2="'+sy(gv)+'"/></g>'; }
+  s+='<g class="axis"><line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'"/><line x1="'+pad+'" y1="'+pad+'" x2="'+pad+'" y2="'+(H-pad)+'"/></g>';
+  s+='<line class="diag" x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+pad+'"/>';
+  pts.forEach(function(p){
+    var d = p.a5===0 ? null : (p.a6-p.a5)/p.a5*100;
+    var tip = esc(p.kernel)+' · '+p.side+' | A5='+fmt(p.a5, p.a5%1===0?0:3)+', A6='+fmt(p.a6, p.a6%1===0?0:3)+(d==null?'':' | Δ'+(d>0?'+':'')+d.toFixed(1)+'%');
+    s+='<g class="pt" data-kernel="'+attrEsc(p.kernel)+'" style="cursor:pointer"><title>'+tip+'</title>'+
+       '<circle cx="'+sx(p.a5)+'" cy="'+sy(p.a6)+'" r="4.5" fill="'+p.color+'" opacity="0.85"/></g>';
+  });
+  s+='<text class="axis-title" x="'+(W/2)+'" y="'+(H-10)+'" text-anchor="middle">A5 '+esc(mk.label)+'</text>';
+  s+='<text class="axis-title" transform="rotate(-90 14 '+Math.round(H/2)+')" x="14" y="'+Math.round(H/2)+'" text-anchor="middle">A6 '+esc(mk.label)+'</text>';
+  s+='<g class="axis">';
+  for(g=0; g<=4; g++){ var gv=min+(max-min)*g/4; s+='<text x="'+pad+'" y="'+sy(gv)+'" text-anchor="end" dx="-6" dy="3">'+fmt(gv, (gv%1===0?0:2))+'</text>'; }
+  s+='</g>';
+  s+='</svg>';
+  host.innerHTML = s;
+
+  // click a point → highlight its table row
+  host.querySelectorAll(".pt").forEach(function(pt){
+    pt.addEventListener("click", function(){
+      var k = pt.getAttribute("data-kernel");
+      var tr = document.querySelector('#cmp-cross-table tr[data-kernel="'+k+'"]');
+      if(!tr) return;
+      document.querySelectorAll('#cmp-cross-table tr[data-kernel]').forEach(function(x){ x.classList.remove("cmp-hl"); });
+      tr.classList.add("cmp-hl");
+      tr.scrollIntoView({behavior:"smooth", block:"center"});
+    });
+  });
+}
+
 VIEWS.versions = function(){
   renderReleaseBanner();
   initUploadZone();

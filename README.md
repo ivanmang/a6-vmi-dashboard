@@ -56,6 +56,30 @@ cd ~/a6-vmi-dashboard && bash build_dashboard.sh --serve
 - The dav_9201 camodel bugs (teardown + UB-parser) are sidestepped, not fixed;
   full diagnosis + reproduction in `docs/cann-a6-camodel-bug-report.md`.
 
+## A5↔A6 compare tab
+
+The `A5↔A6` tab compares the **same kernel on two chips** — A5 (dav-c310, the
+reference) vs A6 (dav_9201, this dashboard) — across vf_real cycles, IPC, EX-IPC
+and EX count, for CCE and VMI/DSL.
+
+The yellow zone is download-only (it can `git pull` gitcode but can never push
+out), so the A5 side is **pushed in as a committed snapshot**
+(`web/a5_report.json`), and `scripts/build_data.py` embeds it into `data.js` as
+`window.REPORT.a5`. Refresh it on the A5 side and commit:
+
+```bash
+# on blue / ecs / b10 — wherever the A5 dashboard data lives:
+cd ~/a6-vmi-dashboard && git pull
+python3 scripts/build_a5_snapshot.py \
+  --report ~/vmi-dashboard/data/cce_vmi_ca_report.json \
+  --datajs ~/vmi-dashboard/web/data.js
+# commit + push web/a5_report.json to gitcode; then on yellow:
+cd ~/a6-vmi-dashboard && git pull && bash build_dashboard.sh --serve
+```
+
+Missing side metrics (e.g. A5-excluded kernels whose CCE FAILs, or kernels with
+no VMI twin) render as `—` and are listed at the bottom of the tab.
+
 ## Repo notes
 
 - Analysis scripts shared with A5 live in `npu_skills` (`ChanKaLok/npu_skills`);

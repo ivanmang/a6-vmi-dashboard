@@ -1212,3 +1212,15 @@ a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,su
 .ex-pc{font-family:var(--mono);color:var(--accent);white-space:nowrap}
 .ex-count-cell{text-align:center;color:var(--dim);font-size:10px}
 .ex-count{color:var(--dim);font-size:10px}
+
+/* ---- A5↔A6 compare tab ---- */
+.cmp-cross-chart{min-height:360px;display:flex;justify-content:center}
+.cmp-cross-chart svg{max-width:100%}
+#cmp-cross-table th.cce{color:var(--cce)}
+#cmp-cross-table th.vmi{color:var(--vmi)}
+#cmp-cross-table th.sep,#cmp-cross-table td.sep{border-left:2px solid var(--border)}
+#cmp-cross-table .a6-good{color:var(--good)}
+#cmp-cross-table .a6-bad{color:var(--bad)}
+#cmp-cross-table .a6-flat{color:var(--dim)}
+#cmp-cross-table tr.cmp-hl td{background:rgba(124,156,255,.14)}
+#cmp-cross-table td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}

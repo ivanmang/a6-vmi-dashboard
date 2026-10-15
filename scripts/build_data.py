@@ -36,6 +36,7 @@ MD_PATH = os.path.join(DATA, "cce_vmi_ca_report.md")
 CCE_RAW_PATH = os.path.join(DATA, "cce_ca_instr_analysis.json")
 VMI_RAW_PATH = os.path.join(DATA, "vmi_ca_instr_analysis.json")
 OUT_PATH = os.path.join(WEB, "data.js")
+A5_SNAPSHOT_PATH = os.path.join(WEB, "a5_report.json")
 
 
 def load_json(path):
@@ -518,12 +519,18 @@ def build():
     meta["daily_status"] = daily_status or "unknown"
     meta["daily_timestamp"] = daily_ts or run_ts
 
+    # A5 snapshot — committed via scripts/build_a5_snapshot.py so the A5↔A6
+    # compare tab works on yellow (which can only pull; it cannot reach the A5
+    # dashboard's data). Optional: if absent the compare tab degrades gracefully.
+    a5_snapshot = load_json(A5_SNAPSHOT_PATH)
+
     payload = {
         "meta": meta,
         "rows": rows,
         "matched_count": len([r for r in rows if (not r.get("excluded")) and r.get("vmi") and r["vmi"].get("ex") is not None]),
         "summary": summary,
         "report_md": md,
+        "a5": a5_snapshot,
     }
 
     os.makedirs(WEB, exist_ok=True)
@@ -539,6 +546,7 @@ def build():
     size = os.path.getsize(OUT_PATH)
     print(f"Wrote {OUT_PATH} ({size/1024:.1f} KB)")
     print(f"  rows: {len(rows)}  matched: {meta['matched_pairs']}  cce_only: {meta['cce_only_count']}  vmi_cases: {meta['vmi_cases_total']}")
+    print(f"  a5 snapshot: {'present (' + str(len(a5_snapshot.get('rows', []))) + ' rows)' if a5_snapshot else 'absent'}")
     print(f"  summary: a1_tally={len(summary['a1_tally'])} a2={len(summary['a2_vmi_ex'])} a3={len(summary['a3_cce_ex'])} a4={len(summary['a4_vfreal'])} a5={len(summary['a5_pred'])} latency_inv={len(summary['latency_inventory'])} outliers={len(summary['outliers'])}")
 
 
