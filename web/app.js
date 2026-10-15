@@ -5279,12 +5279,14 @@ VIEWS.compare = function(){
   rows.sort(function(a,b){ return a.kernel<b.kernel?-1:(a.kernel>b.kernel?1:0); });
 
   el("cmp-cross-n").textContent = "("+rows.length+" shared)";
+  var pn = el("cmp-pairs-n"); if(pn) pn.textContent = "("+rows.length+")";
   var diag = el("cmp-cross-diag");
   if(diag){
     diag.textContent = "A6 dashboard rows: " + ROWS.length + " · A5 snapshot rows: " + A5.length +
       " · shared: " + rows.length + " · A6-only: " + a6Only.length + " · A5-only: " + a5Only.length;
   }
   renderCrossNotes(a6Only, a5Only, a5Excluded, rows);
+  renderSimdTables();
 
   if(!A5.length){
     table.innerHTML = '<p class="empty-state">No A5 snapshot embedded — run <code>scripts/build_a5_snapshot.py</code> then <code>scripts/build_data.py</code> on the A5 side and re-pull.</p>';
@@ -5454,6 +5456,71 @@ function drawCrossScatter(data, mk, side){
       tr.scrollIntoView({behavior:"smooth", block:"center"});
     });
   });
+}
+
+/* ---- A5↔A6 Quant/DeQuant SIMD tables (parsed from pto-vmi README.md) ---- */
+function groupSimdRows(rows){
+  var groups = [];
+  rows.forEach(function(r){
+    var g = groups[groups.length - 1];
+    if(!g || g.kernel !== r.kernel || g.case !== r.case){
+      g = {kernel: r.kernel, case: r.case, a5: null, a6: null};
+      groups.push(g);
+    }
+    if(r.arch === "A5") g.a5 = r; else g.a6 = r;
+  });
+  return groups;
+}
+
+function simdDeltaStr(d){
+  if(d == null) return "—";
+  return (d > 0 ? "+" : "") + d.toFixed(1) + "%";
+}
+
+function renderSimdTable(tableId, noteId, countId, data){
+  var table = el(tableId), note = el(noteId), count = el(countId);
+  if(!table) return;
+  var rows = (data && data.rows) || [];
+  if(count) count.textContent = "("+rows.length+" rows)";
+  if(note && data && data.notes) note.textContent = data.notes;
+  if(!rows.length){
+    table.innerHTML = '<p class="empty-state">No SIMD comparison data — run <code>scripts/extract_a5a6_simd.py --readme ~/pto-vmi/README.md</code> then rebuild.</p>';
+    return;
+  }
+  var groups = groupSimdRows(rows);
+  var html = '<thead><tr><th class="kernel">Kernel</th><th>Case</th><th>Arch</th>'+
+    '<th class="num">SIMD cycles</th><th class="num">EXU IPC</th><th class="num">E/C</th><th class="num sep">Δ SIMD</th></tr></thead><tbody>';
+  groups.forEach(function(g){
+    if(g.a5){
+      html += '<tr>'+
+        '<td class="kernel">'+esc(g.kernel)+'</td>'+
+        '<td>'+esc(g.case)+'</td>'+
+        '<td class="arch-a5">A5</td>'+
+        '<td class="num">'+fmt(g.a5.simd, 0)+'</td>'+
+        '<td class="num">'+fmt(g.a5.ipc, 2)+'</td>'+
+        '<td class="num">'+fmt(g.a5.ec, 2)+'</td>'+
+        '<td class="num sep '+crossGood(true, g.a5.delta)+'">'+simdDeltaStr(g.a5.delta)+'</td>'+
+        '</tr>';
+    }
+    if(g.a6){
+      html += '<tr>'+
+        '<td></td><td></td>'+
+        '<td class="arch-a6">'+esc(g.a6.arch || "A6")+'</td>'+
+        '<td class="num" style="font-weight:600">'+fmt(g.a6.simd, 0)+'</td>'+
+        '<td class="num" style="font-weight:600">'+fmt(g.a6.ipc, 2)+'</td>'+
+        '<td class="num" style="font-weight:600">'+fmt(g.a6.ec, 2)+'</td>'+
+        '<td class="num sep a6-flat">—</td>'+
+        '</tr>';
+    }
+  });
+  html += '</tbody>';
+  table.innerHTML = html;
+}
+
+function renderSimdTables(){
+  var simd = (R && R.a5a6_simd) || null;
+  renderSimdTable("cmp-quant-table", "cmp-quant-note", "cmp-quant-n", simd && simd.quant);
+  renderSimdTable("cmp-dequant-table", "cmp-dequant-note", "cmp-dequant-n", simd && simd.dequant);
 }
 
 VIEWS.versions = function(){

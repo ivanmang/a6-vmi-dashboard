@@ -436,6 +436,14 @@ cp "$REPORT_MD" "$DATA_DIR/cce_vmi_ca_report.md"
 cp "$CCE_JSON" "$DATA_DIR/cce_ca_instr_analysis.json"
 [[ $HAS_VMI -eq 1 && -f "$VMI_JSON" ]] && cp "$VMI_JSON" "$DATA_DIR/vmi_ca_instr_analysis.json"
 
+# A5 vs A6 Quant/DeQuant SIMD tables — parse from pto-vmi README.md (a6 branch)
+info "extract_a5a6_simd.py"
+if [[ -f "$REPO/README.md" ]]; then
+  python3 "$SCRIPT_DIR/scripts/extract_a5a6_simd.py" --readme "$REPO/README.md" --out "$DASH/web/a5a6_simd.json" 2>&1 | tail -4
+else
+  warn "no $REPO/README.md — A5↔A6 Quant/DeQuant SIMD tables will be empty"
+fi
+
 info "build_data.py"
 cd "$DASH"
 PTO_VMI_REPO="$REPO" python3 scripts/build_data.py 2>&1

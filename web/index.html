@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>A6 · dav_9201 — CCE vs VMI/DSL · CA Instruction &amp; IPC Dashboard</title>
-<link rel="stylesheet" href="styles.css?v=20261016">
+<link rel="stylesheet" href="styles.css?v=20261017">
 <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 </head>
 <body>
@@ -748,37 +748,60 @@ aclrtResetDevice+aclFinalize → teardown</pre>
       <p class="muted">Per-kernel performance of the <strong>same CCE/DSL kernel</strong> on A5 (<code>dav-c310</code>, the reference) vs A6 (<code>dav_9201</code>, this dashboard). A6 numbers are generated live in the yellow zone; the A5 side is a committed snapshot (<span id="cmp-cross-a5meta">—</span>). <span id="cmp-cross-n" class="count"></span> shared kernels.</p>
       <p class="muted small" id="cmp-cross-diag"></p>
     </div>
-    <div class="card">
-      <div class="toolbar">
-        <label class="select-label">Metric:
-          <select id="cmp-cross-metric">
-            <option value="vf_real">vf_real — wall-clock cycles (lower = faster)</option>
-            <option value="ipc">IPC — issue rate (higher = better)</option>
-            <option value="ex_ipc">EX-IPC — vector throughput (higher = better)</option>
-            <option value="ex">EX count — vector compute ops (lower = fewer)</option>
-          </select>
-        </label>
-        <label class="select-label">Side:
-          <select id="cmp-cross-side">
-            <option value="both">CCE + VMI</option>
-            <option value="cce">CCE only</option>
-            <option value="vmi">VMI only</option>
-          </select>
-        </label>
-        <label class="select-label">Sort:
-          <select id="cmp-cross-sort">
-            <option value="adelta">Δ% (A6 best first)</option>
-            <option value="a6best">A6 best raw first</option>
-            <option value="kernel">Kernel (A→Z)</option>
-          </select>
-        </label>
-        <input type="search" id="cmp-cross-search" placeholder="Filter by kernel…">
-      </div>
-      <div id="cmp-cross-scatter" class="chart cmp-cross-chart"></div>
-      <div class="table-wrap"><table class="data-table" id="cmp-cross-table"></table></div>
-      <p class="muted small">Δ% = A6 vs A5 (negative cycles/ops ⇒ A6 faster; positive IPC ⇒ A6 better). Click a scatter point to highlight its row.</p>
+    <div class="sub-tabs">
+      <button class="sub-tab active" data-sub="pairs">Kernel pairs <span id="cmp-pairs-n" class="muted small"></span></button>
+      <button class="sub-tab" data-sub="quant">Quant · SIMD <span id="cmp-quant-n" class="muted small"></span></button>
+      <button class="sub-tab" data-sub="dequant">DeQuant · SIMD <span id="cmp-dequant-n" class="muted small"></span></button>
     </div>
-    <div class="card" id="cmp-cross-notes"></div>
+    <div class="sub-panel active" data-sub="pairs">
+      <div class="card">
+        <div class="toolbar">
+          <label class="select-label">Metric:
+            <select id="cmp-cross-metric">
+              <option value="vf_real">vf_real — wall-clock cycles (lower = faster)</option>
+              <option value="ipc">IPC — issue rate (higher = better)</option>
+              <option value="ex_ipc">EX-IPC — vector throughput (higher = better)</option>
+              <option value="ex">EX count — vector compute ops (lower = fewer)</option>
+            </select>
+          </label>
+          <label class="select-label">Side:
+            <select id="cmp-cross-side">
+              <option value="both">CCE + VMI</option>
+              <option value="cce">CCE only</option>
+              <option value="vmi">VMI only</option>
+            </select>
+          </label>
+          <label class="select-label">Sort:
+            <select id="cmp-cross-sort">
+              <option value="adelta">Δ% (A6 best first)</option>
+              <option value="a6best">A6 best raw first</option>
+              <option value="kernel">Kernel (A→Z)</option>
+            </select>
+          </label>
+          <input type="search" id="cmp-cross-search" placeholder="Filter by kernel…">
+        </div>
+        <div id="cmp-cross-scatter" class="chart cmp-cross-chart"></div>
+        <div class="table-wrap"><table class="data-table" id="cmp-cross-table"></table></div>
+        <p class="muted small">Δ% = A6 vs A5 (negative cycles/ops ⇒ A6 faster; positive IPC ⇒ A6 better). Click a scatter point to highlight its row.</p>
+      </div>
+      <div class="card" id="cmp-cross-notes"></div>
+    </div>
+    <div class="sub-panel" data-sub="quant">
+      <div class="card">
+        <h2>Quant — VF/SIMD cycles · EXU IPC · Elements/Cycle</h2>
+        <p class="muted small">SIMD cycles = <code>c_cycle_rvec_busy</code> from the sim machine's <code>perf_pmu_per_vf.log</code> (pure vector-compute, directly comparable across chips). Each kernel is two rows: A5 on top, A6 below. <span class="legend-dot legend-a5"></span>A5 <span class="legend-dot legend-a6"></span>A6</p>
+        <div class="table-wrap"><table class="data-table" id="cmp-quant-table"></table></div>
+        <details class="detail-toggle cmp-simd-note"><summary>Read the full analysis</summary><p class="muted small" id="cmp-quant-note"></p></details>
+      </div>
+    </div>
+    <div class="sub-panel" data-sub="dequant">
+      <div class="card">
+        <h2>DeQuant — VF/SIMD cycles · EXU IPC · Elements/Cycle</h2>
+        <p class="muted small">A6 rows use the vf2 SIMD cycles (data-compute VF of the 2-VF dequant split). <span class="legend-dot legend-a5"></span>A5 <span class="legend-dot legend-a6"></span>A6</p>
+        <div class="table-wrap"><table class="data-table" id="cmp-dequant-table"></table></div>
+        <details class="detail-toggle cmp-simd-note"><summary>Read the full analysis</summary><p class="muted small" id="cmp-dequant-note"></p></details>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -804,7 +827,7 @@ aclrtResetDevice+aclFinalize → teardown</pre>
   <div class="detail-drawer-body" id="detail-drawer-body"></div>
 </div>
 
-<script src="data.js?v=20261016"></script>
-<script src="app.js?v=20261016"></script>
+<script src="data.js?v=20261017"></script>
+<script src="app.js?v=20261017"></script>
 </body>
 </html>

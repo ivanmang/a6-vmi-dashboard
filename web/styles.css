@@ -1224,3 +1224,15 @@ a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,su
 #cmp-cross-table .a6-flat{color:var(--dim)}
 #cmp-cross-table tr.cmp-hl td{background:rgba(124,156,255,.14)}
 #cmp-cross-table td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---- A5↔A6 Quant/DeQuant SIMD tables ---- */
+.legend-dot.legend-a5{background:var(--cce)}
+.legend-dot.legend-a6{background:var(--vmi)}
+#cmp-quant-table .arch-a5,#cmp-dequant-table .arch-a5{color:var(--cce);font-weight:600}
+#cmp-quant-table .arch-a6,#cmp-dequant-table .arch-a6{color:var(--vmi);font-weight:600}
+#cmp-quant-table .a6-good,#cmp-dequant-table .a6-good{color:var(--good);font-weight:600}
+#cmp-quant-table .a6-bad,#cmp-dequant-table .a6-bad{color:var(--bad);font-weight:600}
+#cmp-quant-table .a6-flat,#cmp-dequant-table .a6-flat{color:var(--dim)}
+#cmp-quant-table td.num,#cmp-dequant-table td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.cmp-simd-note{margin-top:12px}
+.cmp-simd-note p{white-space:pre-line;line-height:1.6}

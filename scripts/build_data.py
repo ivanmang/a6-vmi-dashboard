@@ -37,6 +37,7 @@ CCE_RAW_PATH = os.path.join(DATA, "cce_ca_instr_analysis.json")
 VMI_RAW_PATH = os.path.join(DATA, "vmi_ca_instr_analysis.json")
 OUT_PATH = os.path.join(WEB, "data.js")
 A5_SNAPSHOT_PATH = os.path.join(WEB, "a5_report.json")
+A5A6_SIMD_PATH = os.path.join(WEB, "a5a6_simd.json")
 
 
 def load_json(path):
@@ -524,6 +525,10 @@ def build():
     # dashboard's data). Optional: if absent the compare tab degrades gracefully.
     a5_snapshot = load_json(A5_SNAPSHOT_PATH)
 
+    # A5 vs A6 Quant/DeQuant SIMD tables — extracted from pto-vmi README.md (a6
+    # branch) by scripts/extract_a5a6_simd.py. Optional.
+    a5a6_simd = load_json(A5A6_SIMD_PATH)
+
     payload = {
         "meta": meta,
         "rows": rows,
@@ -531,6 +536,7 @@ def build():
         "summary": summary,
         "report_md": md,
         "a5": a5_snapshot,
+        "a5a6_simd": a5a6_simd,
     }
 
     os.makedirs(WEB, exist_ok=True)
