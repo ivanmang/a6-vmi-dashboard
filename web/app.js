@@ -5261,14 +5261,20 @@ VIEWS.compare = function(){
 
   var rows = [], a6Only = [], a5Only = [];
   var a6Seen = {};
+  var sharedSeen = {};
   ROWS.forEach(function(r){
     a6Seen[r.kernel] = true;
     var a5 = a5ByKernel[r.kernel];
-    if(a5) rows.push({kernel: r.kernel, a6: r, a5: a5});
-    else if(!r.excluded) a6Only.push(r.kernel);
+    if(a5){
+      // dedup by kernel — a stale/duplicate dump can yield two A6 rows for the
+      // same kernel; keep the first (the A5 side has exactly one case per kernel).
+      if(!sharedSeen[r.kernel]){ rows.push({kernel: r.kernel, a6: r, a5: a5}); sharedSeen[r.kernel] = true; }
+    } else if(!r.excluded && a6Only.indexOf(r.kernel) < 0){
+      a6Only.push(r.kernel);
+    }
   });
   A5.forEach(function(r){
-    if(r.kernel && !a6Seen[r.kernel]) a5Only.push(r.kernel);
+    if(r.kernel && !a6Seen[r.kernel] && a5Only.indexOf(r.kernel) < 0) a5Only.push(r.kernel);
   });
   rows.sort(function(a,b){ return a.kernel<b.kernel?-1:(a.kernel>b.kernel?1:0); });
 
