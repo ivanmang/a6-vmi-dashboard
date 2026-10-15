@@ -1243,3 +1243,4 @@ a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,su
 .cmp-ov-zero{stroke:var(--dim);stroke-width:1}
 #cmp-ov-kpis .kpi-good .value{color:var(--good)}
 #cmp-ov-kpis .kpi-bad .value{color:var(--bad)}
+#cmp-quant-table tr.cmp-hl td,#cmp-dequant-table tr.cmp-hl td{background:rgba(124,156,255,.16)}

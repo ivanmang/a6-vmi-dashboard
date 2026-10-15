@@ -5508,8 +5508,9 @@ function renderSimdTable(tableId, noteId, countId, data){
   var html = '<thead><tr><th class="kernel">Kernel</th><th>Case</th><th>Arch</th>'+
     '<th class="num">SIMD cycles</th><th class="num">EXU IPC</th><th class="num">E/C</th><th class="num sep">Δ SIMD</th></tr></thead><tbody>';
   groups.forEach(function(g){
+    var dk = attrEsc(g.kernel), dc = attrEsc(g.case);
     if(g.a5){
-      html += '<tr>'+
+      html += '<tr data-kernel="'+dk+'" data-case="'+dc+'">'+
         '<td class="kernel">'+esc(g.kernel)+'</td>'+
         '<td>'+esc(g.case)+'</td>'+
         '<td class="arch-a5">A5</td>'+
@@ -5520,7 +5521,7 @@ function renderSimdTable(tableId, noteId, countId, data){
         '</tr>';
     }
     if(g.a6){
-      html += '<tr>'+
+      html += '<tr data-kernel="'+dk+'" data-case="'+dc+'">'+
         '<td></td><td></td>'+
         '<td class="arch-a6">'+esc(g.a6.arch || "A6")+'</td>'+
         '<td class="num" style="font-weight:600">'+fmt(g.a6.simd, 0)+'</td>'+
@@ -5569,6 +5570,15 @@ function addScatterHover(host){
   });
   tip.addEventListener("mouseenter", function(){ if(hideT){ clearTimeout(hideT); hideT = null; } });
   tip.addEventListener("mouseleave", scheduleHide);
+}
+
+function switchCompareSubTab(which){
+  document.querySelectorAll(".sub-tab").forEach(function(x){
+    x.classList.toggle("active", x.getAttribute("data-sub") === which);
+  });
+  document.querySelectorAll(".sub-panel").forEach(function(p){
+    p.classList.toggle("active", p.getAttribute("data-sub") === which);
+  });
 }
 
 /* ---- A5↔A6 Overview (README headline distilled) ---- */
@@ -5657,11 +5667,12 @@ function renderOverviewBars(q, dq){
 function renderOverviewScatter(q, dq){
   var host = el("cmp-ov-scatter"); if(!host) return;
   var pts = [];
-  [["Quant", q, "var(--cce)"], ["DeQuant", dq, "var(--vmi)"]].forEach(function(t){
-    var name = t[0], rows = t[1], col = t[2];
+  [["quant", q, "var(--cce)"], ["dequant", dq, "var(--vmi)"]].forEach(function(t){
+    var fam = t[0], rows = t[1], col = t[2];
     groupSimdRows(rows).forEach(function(g){
       if(g.a5 && g.a6 && g.a5.simd != null && g.a6.simd != null){
-        pts.push({label: g.kernel + " " + g.case, family: name, color: col,
+        pts.push({label: g.kernel + " " + g.case, family: (fam === "quant" ? "Quant" : "DeQuant"),
+                  famKey: fam, kernel: g.kernel, case: g.case, color: col,
                   a5: g.a5.simd, a6: g.a6.simd, delta: g.a5.delta,
                   ipcA5: g.a5.ipc, ipcA6: g.a6.ipc, ecA5: g.a5.ec, ecA6: g.a6.ec});
       }
@@ -5683,7 +5694,7 @@ function renderOverviewScatter(q, dq){
       (p.delta != null ? '<br>Δ SIMD '+simdDeltaStr(p.delta) : '')+
       (p.ipcA5 != null && p.ipcA6 != null ? '<br>EXU IPC '+fmt(p.ipcA5,2)+' → '+fmt(p.ipcA6,2) : '')+
       (p.ecA5 != null && p.ecA6 != null ? ' · E/C '+fmt(p.ecA5,2)+' → '+fmt(p.ecA6,2) : '');
-    s += '<g class="pt" data-tip="'+attrEsc(tip)+'"><circle cx="'+sx(p.a5)+'" cy="'+sy(p.a6)+'" r="4.5" fill="'+p.color+'" opacity="0.85"/></g>';
+    s += '<g class="pt" data-tip="'+attrEsc(tip)+'" data-family="'+p.famKey+'" data-kernel="'+attrEsc(p.kernel)+'" data-case="'+attrEsc(p.case)+'"><circle cx="'+sx(p.a5)+'" cy="'+sy(p.a6)+'" r="4.5" fill="'+p.color+'" opacity="0.85"/></g>';
   });
   s += '<text class="axis-title" x="'+(W/2)+'" y="'+(H-10)+'" text-anchor="middle">A5 SIMD cycles</text>';
   s += '<text class="axis-title" transform="rotate(-90 14 '+Math.round(H/2)+')" x="14" y="'+Math.round(H/2)+'" text-anchor="middle">A6 SIMD cycles</text>';
@@ -5693,6 +5704,24 @@ function renderOverviewScatter(q, dq){
   s += '</svg>';
   host.innerHTML = s;
   addScatterHover(host);
+
+  // click a dot → jump to its row in the Quant/DeQuant table
+  host.querySelectorAll(".pt").forEach(function(pt){
+    pt.addEventListener("click", function(){
+      var fam = pt.getAttribute("data-family");
+      var k = pt.getAttribute("data-kernel");
+      var c = pt.getAttribute("data-case");
+      if(!fam || !k) return;
+      switchCompareSubTab(fam);
+      var table = el("cmp-" + fam + "-table");
+      if(!table) return;
+      var tr = table.querySelector('tr[data-kernel="'+k+'"][data-case="'+c+'"]');
+      if(!tr) return;
+      table.querySelectorAll("tr.cmp-hl").forEach(function(x){ x.classList.remove("cmp-hl"); });
+      tr.classList.add("cmp-hl");
+      setTimeout(function(){ tr.scrollIntoView({behavior: "smooth", block: "center"}); }, 60);
+    });
+  });
 }
 
 VIEWS.versions = function(){
