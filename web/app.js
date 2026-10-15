@@ -5273,6 +5273,11 @@ VIEWS.compare = function(){
   rows.sort(function(a,b){ return a.kernel<b.kernel?-1:(a.kernel>b.kernel?1:0); });
 
   el("cmp-cross-n").textContent = "("+rows.length+" shared)";
+  var diag = el("cmp-cross-diag");
+  if(diag){
+    diag.textContent = "A6 dashboard rows: " + ROWS.length + " · A5 snapshot rows: " + A5.length +
+      " · shared: " + rows.length + " · A6-only: " + a6Only.length + " · A5-only: " + a5Only.length;
+  }
   renderCrossNotes(a6Only, a5Only, a5Excluded, rows);
 
   if(!A5.length){
@@ -5281,7 +5286,7 @@ VIEWS.compare = function(){
     return;
   }
   if(!rows.length){
-    table.innerHTML = '<p class="empty-state">No shared kernels between the A6 dashboard and the A5 snapshot.</p>';
+    table.innerHTML = '<p class="empty-state">No shared kernels between the A6 dashboard ('+ROWS.length+' row(s)) and the A5 snapshot ('+A5.length+' row(s)). If A6 rows = 0, <code>~/pto-vmi</code> here is on the wrong branch — it must be on <code>a6</code> so <code>cce/a6/</code> exists.</p>';
     chart.innerHTML = '';
     return;
   }
