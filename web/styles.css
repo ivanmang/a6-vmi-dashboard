@@ -1236,3 +1236,10 @@ a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,su
 #cmp-quant-table td.num,#cmp-dequant-table td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .cmp-simd-note{margin-top:12px}
 .cmp-simd-note p{white-space:pre-line;line-height:1.6}
+
+/* ---- A5↔A6 Overview ---- */
+.cmp-ov-bars{min-height:320px;display:flex;justify-content:center}
+.cmp-ov-bars svg{max-width:100%}
+.cmp-ov-zero{stroke:var(--dim);stroke-width:1}
+#cmp-ov-kpis .kpi-good .value{color:var(--good)}
+#cmp-ov-kpis .kpi-bad .value{color:var(--bad)}

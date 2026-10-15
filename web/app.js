@@ -5292,6 +5292,7 @@ VIEWS.compare = function(){
       " · shared: " + rows.length + " · A6-only: " + a6Only.length + " · A5-only: " + a5Only.length;
   }
   renderCrossNotes(a6Only, a5Only, a5Excluded, rows, a6Excluded);
+  renderOverview();
   renderSimdTables();
 
   if(!A5.length){
@@ -5533,6 +5534,123 @@ function renderSimdTables(){
   var simd = (R && R.a5a6_simd) || null;
   renderSimdTable("cmp-quant-table", "cmp-quant-note", "cmp-quant-n", simd && simd.quant);
   renderSimdTable("cmp-dequant-table", "cmp-dequant-note", "cmp-dequant-n", simd && simd.dequant);
+}
+
+/* ---- A5↔A6 Overview (README headline distilled) ---- */
+function simdStats(rows){
+  var comp = rows.filter(function(r){ return r.delta != null && r.arch === "A5"; });
+  var wins = comp.filter(function(r){ return r.delta < -0.5; });
+  var losses = comp.filter(function(r){ return r.delta > 0.5; });
+  var best = null, bestK = "", worst = null, worstK = "";
+  comp.forEach(function(r){
+    if(best == null || r.delta < best){ best = r.delta; bestK = r.kernel + " " + r.case; }
+    if(worst == null || r.delta > worst){ worst = r.delta; worstK = r.kernel + " " + r.case; }
+  });
+  return {n: comp.length, wins: wins.length, losses: losses.length,
+          best: best, bestK: bestK, worst: worst, worstK: worstK};
+}
+
+function kpiCard(label, value, delta, cls, acc){
+  return '<div class="kpi '+(acc || "kpi-neutral")+'">'+
+    '<div class="label">'+label+'</div>'+
+    '<div class="value">'+value+'</div>'+
+    (delta ? '<div class="delta '+cls+'">'+delta+'</div>' : '')+'</div>';
+}
+
+function renderOverview(){
+  var simd = (R && R.a5a6_simd) || {};
+  var q = (simd.quant && simd.quant.rows) || [];
+  var dq = (simd.dequant && simd.dequant.rows) || [];
+  var qs = simdStats(q), ds = simdStats(dq);
+
+  var h = el("cmp-ov-headline");
+  if(h){
+    var parts = [];
+    if(qs.n) parts.push("A6 wins " + qs.wins + " of " + qs.n + " Quant cases");
+    if(ds.n) parts.push(ds.wins + " of " + ds.n + " DeQuant cases");
+    h.textContent = parts.join(" · ") || "No A5 vs A6 SIMD data";
+  }
+  var sub = el("cmp-ov-sub");
+  if(sub){
+    var items = [];
+    if(qs.best != null) items.push("best win " + simdDeltaStr(qs.best) + " — " + qs.bestK);
+    if(qs.worst != null) items.push("worst loss " + simdDeltaStr(qs.worst) + " — " + qs.worstK);
+    sub.textContent = items.join("  ·  ");
+  }
+  var kp = el("cmp-ov-kpis");
+  if(kp){
+    var best = qs.best, worst = qs.worst;
+    kp.innerHTML =
+      kpiCard("Quant · A6 wins", qs.wins + " / " + qs.n, "comparable cases", "up", "kpi-good") +
+      kpiCard("DeQuant · A6 wins", ds.wins + " / " + ds.n, "comparable cases", "up", "kpi-good") +
+      kpiCard("Best win", best != null ? simdDeltaStr(best) : "—", qs.bestK, "up", "kpi-good") +
+      kpiCard("Worst loss", worst != null ? simdDeltaStr(worst) : "—", qs.worstK, "down", "kpi-bad");
+  }
+  renderOverviewBars(q, dq);
+  renderOverviewScatter(q, dq);
+}
+
+function renderOverviewBars(q, dq){
+  var host = el("cmp-ov-bars"); if(!host) return;
+  var all = [];
+  q.forEach(function(r){ if(r.delta != null && r.arch === "A5") all.push({label: r.kernel + " " + r.case, delta: r.delta}); });
+  dq.forEach(function(r){ if(r.delta != null && r.arch === "A5") all.push({label: r.kernel + " " + r.case, delta: r.delta}); });
+  if(!all.length){ host.innerHTML = '<p class="empty-state">no Δ data</p>'; return; }
+  all.sort(function(a,b){ return a.delta - b.delta; });
+  var maxAbs = Math.max.apply(null, all.map(function(d){ return Math.abs(d.delta); })) * 1.12 || 50;
+  var rowH = 25, W = 780, padL = 215, padR = 60;
+  var H = all.length * rowH + 22;
+  var zeroX = padL + (W - padL - padR) / 2;
+  var scale = (W - padL - padR) / 2 / maxAbs;
+  var s = svgOpen(W, H);
+  s += '<line class="cmp-ov-zero" x1="'+zeroX+'" y1="6" x2="'+zeroX+'" y2="'+(H-16)+'"/>';
+  all.forEach(function(d, i){
+    var y = 16 + i*rowH;
+    var w = Math.abs(d.delta) * scale;
+    var x = d.delta < 0 ? zeroX - w : zeroX;
+    var col = d.delta < 0 ? "var(--good)" : "var(--bad)";
+    var lx = d.delta < 0 ? x - 5 : x + w + 5;
+    var anchor = d.delta < 0 ? "end" : "start";
+    s += '<text x="'+(padL-8)+'" y="'+(y+4)+'" text-anchor="end" fill="var(--muted)" font-size="10.5">'+esc(d.label)+'</text>';
+    s += '<rect x="'+x+'" y="'+(y-12)+'" width="'+Math.max(w, 1)+'" height="16" rx="3" fill="'+col+'" opacity="0.85"/>';
+    s += '<text x="'+lx+'" y="'+(y+4)+'" text-anchor="'+anchor+'" fill="'+col+'" font-size="10.5" font-weight="600">'+simdDeltaStr(d.delta)+'</text>';
+  });
+  s += '<text x="'+zeroX+'" y="'+(H-3)+'" text-anchor="middle" fill="var(--dim)" font-size="9.5">0% (A5 = A6)</text>';
+  host.innerHTML = svgClose(s);
+}
+
+function renderOverviewScatter(q, dq){
+  var host = el("cmp-ov-scatter"); if(!host) return;
+  var pts = [];
+  [["Quant", q, "var(--cce)"], ["DeQuant", dq, "var(--vmi)"]].forEach(function(t){
+    var name = t[0], rows = t[1], col = t[2];
+    groupSimdRows(rows).forEach(function(g){
+      if(g.a5 && g.a6 && g.a5.simd != null && g.a6.simd != null){
+        pts.push({label: g.kernel + " " + g.case, family: name, color: col, a5: g.a5.simd, a6: g.a6.simd, delta: g.a5.delta});
+      }
+    });
+  });
+  if(!pts.length){ host.innerHTML = '<p class="empty-state">no data</p>'; return; }
+  var W = 520, H = 380, pad = 46;
+  var max = Math.max.apply(null, pts.map(function(p){ return Math.max(p.a5, p.a6); })) * 1.12 || 1;
+  var sx = function(x){ return pad + (x / max) * (W - pad - pad); };
+  var sy = function(y){ return H - pad - (y / max) * (H - pad - pad); };
+  var s = '<svg viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'">';
+  var g;
+  for(g = 0; g <= 4; g++){ var gv = max * g / 4; s += '<g class="grid"><line x1="'+pad+'" x2="'+(W-pad)+'" y1="'+sy(gv)+'" y2="'+sy(gv)+'"/></g>'; }
+  s += '<g class="axis"><line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'"/><line x1="'+pad+'" y1="'+pad+'" x2="'+pad+'" y2="'+(H-pad)+'"/></g>';
+  s += '<line class="diag" x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+pad+'"/>';
+  pts.forEach(function(p){
+    var tip = esc(p.label) + ' · ' + p.family + ' | A5=' + p.a5 + ', A6=' + p.a6 + (p.delta != null ? ' | Δ' + simdDeltaStr(p.delta) : '');
+    s += '<g class="pt" style="cursor:default"><title>'+tip+'</title><circle cx="'+sx(p.a5)+'" cy="'+sy(p.a6)+'" r="4.5" fill="'+p.color+'" opacity="0.85"/></g>';
+  });
+  s += '<text class="axis-title" x="'+(W/2)+'" y="'+(H-10)+'" text-anchor="middle">A5 SIMD cycles</text>';
+  s += '<text class="axis-title" transform="rotate(-90 14 '+Math.round(H/2)+')" x="14" y="'+Math.round(H/2)+'" text-anchor="middle">A6 SIMD cycles</text>';
+  s += '<g class="axis">';
+  for(g = 0; g <= 4; g++){ var gv = max * g / 4; s += '<text x="'+pad+'" y="'+sy(gv)+'" text-anchor="end" dx="-6" dy="3">'+fmt(gv, 0)+'</text>'; }
+  s += '</g>';
+  s += '</svg>';
+  host.innerHTML = s;
 }
 
 VIEWS.versions = function(){
