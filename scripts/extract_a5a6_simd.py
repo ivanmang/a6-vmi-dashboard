@@ -55,6 +55,22 @@ def _delta(cell):
     return _num(cell)
 
 
+def full_kernel(short):
+    """Map a README short kernel label to the pto-vmi kernel-dir name.
+
+    The README Quant/DeQuant tables use short labels; Kernel Lab (the explorer)
+    is keyed by the full cce/a6/<Kernel> directory name. Rules:
+      - "Square sq16/sqs32"  → QuantBf16toMXFp4SquareKernel
+      - "DequantMXFp8→FP32"  → DequantMXFp8Kernel (drop the →dst suffix)
+      - everything else       → <name>Kernel
+    """
+    s = short.strip()
+    if s.lower().startswith("square"):
+        return "QuantBf16toMXFp4SquareKernel"
+    s = s.split("\u2192")[0].strip()  # strip "→dst" suffix
+    return s + "Kernel"
+
+
 def parse_table(lines):
     rows = []
     prev_kernel = prev_case = ""
@@ -78,6 +94,7 @@ def parse_table(lines):
             "kernel": kernel,
             "case": case,
             "arch": cells[2],
+            "kernel_full": full_kernel(kernel),
             "simd": _num(cells[3]),
             "ipc": _num(cells[4]),
             "ec": _num(cells[5]),

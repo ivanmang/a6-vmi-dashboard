@@ -1244,3 +1244,7 @@ a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,su
 #cmp-ov-kpis .kpi-good .value{color:var(--good)}
 #cmp-ov-kpis .kpi-bad .value{color:var(--bad)}
 #cmp-quant-table tr.cmp-hl td,#cmp-dequant-table tr.cmp-hl td{background:rgba(124,156,255,.16)}
+
+/* clickable kernel name in the A5↔A6 SIMD tables */
+.simd-explore{font-size:inherit;font-weight:600;color:var(--heading);margin-left:0;opacity:1;text-decoration:none}
+.simd-explore:hover{color:var(--accent);text-decoration:underline}

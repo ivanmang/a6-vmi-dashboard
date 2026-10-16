@@ -2352,6 +2352,7 @@ function exploreKernel(caseId){
         if(man.bundles[i].case_id===caseId || man.bundles[i].kernel===caseId){ f=man.bundles[i].file; break; }
       }
       if(f){ EX_PENDING_FILE=f; if(tab){ tab.click(); } var sel=el("explorer-select"); if(sel&&sel.value!==f) loadBundle(f); }
+      else if(tab){ tab.click(); }
     });
   }
 }
@@ -5509,9 +5510,13 @@ function renderSimdTable(tableId, noteId, countId, data){
     '<th class="num">SIMD cycles</th><th class="num">EXU IPC</th><th class="num">E/C</th><th class="num sep">Δ SIMD</th></tr></thead><tbody>';
   groups.forEach(function(g){
     var dk = attrEsc(g.kernel), dc = attrEsc(g.case);
+    var full = (g.a5 && g.a5.kernel_full) || (g.a6 && g.a6.kernel_full);
+    var nameCell = full
+      ? '<a class="explore-link simd-explore" data-explore="'+attrEsc(full)+'" title="open in Kernel Lab">'+esc(g.kernel)+'</a>'
+      : esc(g.kernel);
     if(g.a5){
       html += '<tr data-kernel="'+dk+'" data-case="'+dc+'">'+
-        '<td class="kernel">'+esc(g.kernel)+'</td>'+
+        '<td class="kernel">'+nameCell+'</td>'+
         '<td>'+esc(g.case)+'</td>'+
         '<td class="arch-a5">A5</td>'+
         '<td class="num">'+fmt(g.a5.simd, 0)+'</td>'+
@@ -5521,8 +5526,10 @@ function renderSimdTable(tableId, noteId, countId, data){
         '</tr>';
     }
     if(g.a6){
+      // A6-only kernels (e.g. DequantHiF4) have no A5 row — show name/case here.
+      var showName = !g.a5;
       html += '<tr data-kernel="'+dk+'" data-case="'+dc+'">'+
-        '<td></td><td></td>'+
+        (showName ? '<td class="kernel">'+nameCell+'</td><td>'+esc(g.case)+'</td>' : '<td></td><td></td>')+
         '<td class="arch-a6">'+esc(g.a6.arch || "A6")+'</td>'+
         '<td class="num" style="font-weight:600">'+fmt(g.a6.simd, 0)+'</td>'+
         '<td class="num" style="font-weight:600">'+fmt(g.a6.ipc, 2)+'</td>'+
