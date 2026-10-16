@@ -1248,3 +1248,17 @@ a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,su
 /* clickable kernel name in the A5↔A6 SIMD tables */
 .simd-explore{font-size:inherit;font-weight:600;color:var(--heading);margin-left:0;opacity:1;text-decoration:none}
 .simd-explore:hover{color:var(--accent);text-decoration:underline}
+
+/* ---- A5↔A6 C++ diff pane (Kernel Lab) ---- */
+.ex-cross-btn{background:var(--surface-1);color:var(--muted);border:none;padding:4px 9px;font-size:11px;cursor:pointer;line-height:1.2}
+.ex-cross-btn.active{background:var(--good);color:var(--surface-0);font-weight:600}
+.ex-cross-btn:hover:not(.active){background:rgba(74,222,128,.14);color:var(--heading)}
+.ex-diff-line td.ex-code pre{white-space:pre;overflow-x:auto}
+.ex-diff-line.diff-del td.ex-code{background:rgba(220,38,38,.10)}
+.ex-diff-line.diff-add td.ex-code{background:rgba(21,128,61,.10)}
+.ex-diff-line .diff-mark{width:18px;text-align:center;font-weight:700;color:var(--dim)}
+.ex-diff-line.diff-del .diff-mark{color:var(--bad)}
+.ex-diff-line.diff-add .diff-mark{color:var(--good)}
+.ex-diff-legend{margin-left:auto;font-size:10.5px}
+.diff-minus{color:var(--bad);font-weight:700}
+.diff-plus{color:var(--good);font-weight:700}

@@ -498,6 +498,19 @@ def main():
             cce_lines = f.read().splitlines()
     cce_rel = os.path.relpath(cce_cpp_file, repo) if cce_cpp_file else None
 
+    # --- 1b. A5 CCE cpp (the A5 twin, for the A5↔A6 code diff in Kernel Lab) ---
+    # Always read cce/a5/<Kernel> regardless of --arch; missing twin → empty lines.
+    a5_cce_dir = os.path.join(cce_base, "a5", args.kernel)
+    a5_cpp_files = [f for f in os.listdir(a5_cce_dir) if f.endswith(".cpp") and f != "main.cpp"] if os.path.isdir(a5_cce_dir) else []
+    if not a5_cpp_files:
+        a5_cpp_files = [f for f in os.listdir(a5_cce_dir) if f.endswith(".cpp")]
+    a5_cce_cpp_file = os.path.join(a5_cce_dir, a5_cpp_files[0]) if a5_cpp_files else None
+    a5_cce_lines = []
+    if a5_cce_cpp_file:
+        with open(a5_cce_cpp_file, encoding="utf-8", errors="replace") as f:
+            a5_cce_lines = f.read().splitlines()
+    a5_cce_rel = os.path.relpath(a5_cce_cpp_file, repo) if a5_cce_cpp_file else None
+
     # --- 2. DSL py (prefer the .py matching --case; fall back to sorted first) ---
     dsl_dir = os.path.join(repo, "dsl", args.kernel)
     dsl_py_file = None
@@ -597,6 +610,8 @@ def main():
         "layers": {
             "cce_cpp": {"lines": cce_lines, "file": cce_rel,
                         "src_url": f"{GITCODE_BASE}/{cce_rel}" if cce_rel else None},
+            "a5_cce_cpp": {"lines": a5_cce_lines, "file": a5_cce_rel,
+                           "src_url": f"{GITCODE_BASE}/{a5_cce_rel}" if a5_cce_rel else None},
             "dsl_py": {"lines": dsl_lines, "file": dsl_rel,
                        "src_url": f"{GITCODE_BASE}/{dsl_rel}" if dsl_rel else None},
             "mlir": {"lines": mlir_lines, "error": mlir_err if not mlir_text else None},

@@ -3040,12 +3040,15 @@ function loadBundle(file){
 
 var EX_LEFT = "cce", EX_MIDDLE = "dsl", EX_RIGHT = "vpto";   // default 3-way panes (CCE | VMI/DSL | MI IR)
 var EX_3PANE = true;   // 3-pane layout (CCE|VMI|MI IR) vs 2-pane (any two panes)
+var EX_CROSS_MODE = false;  // A5↔A6 code-diff mode (A5 C++ | A6 C++ | unified diff)
 var EX_PENDING_FILE = null;  // queued by exploreKernel so VIEWS.explorer loads the right bundle
 
 // Pane catalog: value → {label, build(disasm,tl,ir)→paneElement}
 // Order = dropdown order. The user picks any two (left + right).
 var EX_PANES = [
   {value:"cce",  label:"CCE C++",           kind:"src"},
+  {value:"a5_cce", label:"A5 C++",            kind:"src"},
+  {value:"cce_diff", label:"A5↔A6 C++ diff",   kind:"diff"},
   {value:"dsl",  label:"VMI/DSL Python",    kind:"src"},
   {value:"mlir", label:"VMI MLIR",          kind:"ir"},
   {value:"vpto", label:"MI IR",              kind:"ir"},
@@ -3059,6 +3062,8 @@ function paneKind(v){ for(var i=0;i<EX_PANES.length;i++) if(EX_PANES[i].value===
 function buildPane(value, b, disasm, tl, ir){
   // returns a pane element for the given layer value
   if(value==="cce")  return exPane("CCE C++", b.layers.cce_cpp.lines, b.layers.cce_cpp.src_url, "cce", b.layers.cce_cpp.file, "cce");
+  if(value==="a5_cce") return exPane("A5 C++", (b.layers.a5_cce_cpp||{}).lines||[], (b.layers.a5_cce_cpp||{}).src_url, "a5_cce", (b.layers.a5_cce_cpp||{}).file, "cce");
+  if(value==="cce_diff") return exCceDiffPane(b);
   if(value==="dsl")  return exPane("VMI/DSL Python", b.layers.dsl_py.lines, b.layers.dsl_py.src_url, "dsl", b.layers.dsl_py.file, "py");
   if(value==="mlir") return exPane("VMI MLIR", b.layers.mlir.lines||[], null, "ir", b.layers.mlir.file, "ir", true);
   if(value==="vpto") return exPane("MI IR", b.layers.vpto.lines||[], null, "mi", b.layers.vpto.file, "ir", true);
@@ -3066,6 +3071,52 @@ function buildPane(value, b, disasm, tl, ir){
   // disasm variants
   if(value==="cce_disasm" && b.layers.cce_disasm) return exDisasmPane(b.layers.cce_disasm.instructions, b.cce_timeline||tl, "CCE");
   return exDisasmPane(b.layers.vmi_disasm ? b.layers.vmi_disasm.instructions : disasm, tl, "VMI");
+}
+
+// LCS-based line diff for the A5↔A6 C++ diff pane (small files: O(n·m) is fine).
+function lineDiff(a, b){
+  var n = a.length, m = b.length;
+  var dp = [];
+  for(var i = 0; i <= n; i++) dp.push(new Array(m + 1).fill(0));
+  for(var i = n - 1; i >= 0; i--){
+    for(var j = m - 1; j >= 0; j--){
+      dp[i][j] = (a[i] === b[j]) ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+    }
+  }
+  var out = [], i = 0, j = 0;
+  while(i < n && j < m){
+    if(a[i] === b[j]){ out.push({t:"=", txt:a[i]}); i++; j++; }
+    else if(dp[i+1][j] >= dp[i][j+1]){ out.push({t:"-", txt:a[i]}); i++; }
+    else { out.push({t:"+", txt:b[j]}); j++; }
+  }
+  while(i < n){ out.push({t:"-", txt:a[i++]}); }
+  while(j < m){ out.push({t:"+", txt:b[j++]}); }
+  return out;
+}
+
+function exCceDiffPane(b){
+  var div = document.createElement("div"); div.className = "ex-pane cce_diff";
+  var a5 = (b.layers.a5_cce_cpp && b.layers.a5_cce_cpp.lines) || [];
+  var a6 = (b.layers.cce_cpp && b.layers.cce_cpp.lines) || [];
+  var head = '<div class="ex-pane-head"><span>A5↔A6 C++ diff</span>'+
+    '<code class="ex-file">A5 '+a5.length+' · A6 '+a6.length+' lines</code>'+
+    '<span class="muted ex-diff-legend"><span class="diff-minus">−</span> A5 only &nbsp;&nbsp;<span class="diff-plus">+</span> A6 only</span>'+
+    '</div>';
+  if(!a5.length){
+    div.innerHTML = head + '<div class="ex-pane-body"><p class="muted">no A5 twin at cce/a5/'+esc(b.kernel)+' — A6-only kernel.</p></div>';
+    return div;
+  }
+  var rows = lineDiff(a5, a6);
+  var body = '<div class="ex-pane-body"><table class="ex-code">';
+  rows.forEach(function(r){
+    var cls = r.t === "-" ? "ex-diff-line diff-del" : (r.t === "+" ? "ex-diff-line diff-add" : "ex-diff-line");
+    var mark = r.t === "-" ? "−" : (r.t === "+" ? "+" : "");
+    body += '<tr class="'+cls+'"><td class="ex-lineno diff-mark">'+mark+'</td>'+
+      '<td class="ex-code"><pre>'+hlLine(r.txt, "cce")+'</pre></td></tr>';
+  });
+  body += '</table></div>';
+  div.innerHTML = head + body;
+  return div;
 }
 
 function renderExplorer(){
@@ -3102,6 +3153,10 @@ function renderExplorer(){
       '<button class="ex-lay-btn'+(EX_3PANE?' active':'')+'" data-lay="3">3-way</button>'+
       '<button class="ex-lay-btn'+(!EX_3PANE?' active':'')+'" data-lay="2">2-pane</button>'+
     '</div>'+
+    '<div class="ex-layout-toggle" title="Toggle A5↔A6 C++ code diff">'+
+      '<button class="ex-cross-btn'+(!EX_CROSS_MODE?' active':'')+'" data-cross="0">A6</button>'+
+      '<button class="ex-cross-btn'+(EX_CROSS_MODE?' active':'')+'" data-cross="1">A5↔A6 diff</button>'+
+    '</div>'+
     '<label class="ex-sellbl">Left: <select id="ex-left-sel">'+optsL+'</select></label>'+
     (EX_3PANE ? '<label class="ex-sellbl">Middle: <select id="ex-mid-sel">'+optsM+'</select></label>' : '')+
     '<span class="ex-swap" id="ex-swap-btn" title="Swap left/right">⇄</span>'+
@@ -3132,7 +3187,18 @@ function renderExplorer(){
   document.querySelectorAll(".ex-lay-btn").forEach(function(btn){
     btn.onclick=function(){
       EX_3PANE = (btn.dataset.lay==="3");
+      EX_CROSS_MODE = false;
       if(EX_3PANE){ EX_LEFT="cce"; EX_MIDDLE="dsl"; EX_RIGHT="vpto"; }  // sensible 3-way defaults
+      renderExplorer();
+    };
+  });
+  // A5↔A6 code-diff toggle: presets the 3 panes to A5 C++ | A6 C++ | unified diff
+  document.querySelectorAll(".ex-cross-btn").forEach(function(btn){
+    btn.onclick = function(){
+      EX_CROSS_MODE = (btn.dataset.cross === "1");
+      EX_3PANE = true;
+      if(EX_CROSS_MODE){ EX_LEFT="a5_cce"; EX_MIDDLE="cce"; EX_RIGHT="cce_diff"; }
+      else { EX_LEFT="cce"; EX_MIDDLE="dsl"; EX_RIGHT="vpto"; }
       renderExplorer();
     };
   });
@@ -3318,7 +3384,7 @@ var HL_RULES = {
   ]
 };
 function hlLang(paneClass){
-  if(paneClass==="cce") return "cce";
+  if(paneClass==="cce" || paneClass==="a5_cce" || paneClass==="cce_diff") return "cce";
   if(paneClass==="dsl") return "py";
   return "ir";
 }
