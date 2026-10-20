@@ -3046,22 +3046,22 @@ var EX_PENDING_FILE = null;  // queued by exploreKernel so VIEWS.explorer loads 
 // Pane catalog: value → {label, build(disasm,tl,ir)→paneElement}
 // Order = dropdown order. The user picks any two (left + right).
 var EX_PANES = [
-  {value:"cce",  label:"CCE C++",           kind:"src"},
-  {value:"a5_cce", label:"A5 C++",            kind:"src"},
-  {value:"cce_diff", label:"A5↔A6 C++ diff",   kind:"diff"},
+  {value:"cce",  label:"A6 C++",             kind:"src"},
+  {value:"a5_cce", label:"A5 C++",             kind:"src"},
+  {value:"cce_diff", label:"A5↔A6 C++ diff",    kind:"diff"},
   {value:"dsl",  label:"VMI/DSL Python",    kind:"src"},
   {value:"mlir", label:"VMI MLIR",          kind:"ir"},
   {value:"vpto", label:"MI IR",              kind:"ir"},
   {value:"llvm", label:"LLVM IR",           kind:"ir"},
-  {value:"vmi_disasm", label:"A5 disasm (VMI trace)",  kind:"disasm", side:"vmi"},
-  {value:"cce_disasm", label:"A5 disasm (CCE trace)",  kind:"disasm", side:"cce"},
+  {value:"vmi_disasm", label:"A6 disasm (VMI trace)",  kind:"disasm", side:"vmi"},
+  {value:"cce_disasm", label:"A6 disasm (CCE trace)",  kind:"disasm", side:"cce"},
 ];
 function paneLabel(v){ for(var i=0;i<EX_PANES.length;i++) if(EX_PANES[i].value===v) return EX_PANES[i].label; return v; }
 function paneKind(v){ for(var i=0;i<EX_PANES.length;i++) if(EX_PANES[i].value===v) return EX_PANES[i].kind; return "src"; }
 
 function buildPane(value, b, disasm, tl, ir){
   // returns a pane element for the given layer value
-  if(value==="cce")  return exPane("CCE C++", b.layers.cce_cpp.lines, b.layers.cce_cpp.src_url, "cce", b.layers.cce_cpp.file, "cce");
+  if(value==="cce")  return exPane("A6 C++", b.layers.cce_cpp.lines, b.layers.cce_cpp.src_url, "cce", b.layers.cce_cpp.file, "cce");
   if(value==="a5_cce") return exPane("A5 C++", (b.layers.a5_cce_cpp||{}).lines||[], (b.layers.a5_cce_cpp||{}).src_url, "a5_cce", (b.layers.a5_cce_cpp||{}).file, "cce");
   if(value==="cce_diff") return exCceDiffPane(b);
   if(value==="dsl")  return exPane("VMI/DSL Python", b.layers.dsl_py.lines, b.layers.dsl_py.src_url, "dsl", b.layers.dsl_py.file, "py");
@@ -3098,9 +3098,9 @@ function exCceDiffPane(b){
   var div = document.createElement("div"); div.className = "ex-pane cce_diff";
   var a5 = (b.layers.a5_cce_cpp && b.layers.a5_cce_cpp.lines) || [];
   var a6 = (b.layers.cce_cpp && b.layers.cce_cpp.lines) || [];
-  var head = '<div class="ex-pane-head"><span>A5↔A6 C++ diff</span>'+
+  var head = '<div class="ex-pane-head"><span>A5 ↔ A6 C++ diff</span>'+
     '<code class="ex-file">A5 '+a5.length+' · A6 '+a6.length+' lines</code>'+
-    '<span class="muted ex-diff-legend"><span class="diff-minus">−</span> A5 only &nbsp;&nbsp;<span class="diff-plus">+</span> A6 only</span>'+
+    '<span class="muted ex-diff-legend"><span class="diff-minus">−</span> A5 (<code>cce/a5</code>) only &nbsp;&nbsp;<span class="diff-plus">+</span> A6 (<code>cce/a6</code>) only</span>'+
     '</div>';
   if(!a5.length){
     div.innerHTML = head + '<div class="ex-pane-body"><p class="muted">no A5 twin at cce/a5/'+esc(b.kernel)+' — A6-only kernel.</p></div>';
@@ -3144,7 +3144,7 @@ function renderExplorer(){
   var optsL = EX_PANES.map(function(p){return '<option value="'+p.value+'"'+(p.value===EX_LEFT?' selected':'')+'>'+esc(p.label)+'</option>';}).join("");
   var optsM = EX_PANES.map(function(p){return '<option value="'+p.value+'"'+(p.value===EX_MIDDLE?' selected':'')+'>'+esc(p.label)+'</option>';}).join("");
   var optsR = EX_PANES.map(function(p){return '<option value="'+p.value+'"'+(p.value===EX_RIGHT?' selected':'')+'>'+esc(p.label)+'</option>';}).join("");
-  var hint = EX_3PANE ? 'Click a line in any pane to highlight correlated lines across all three (bridged via the A5 disasm trace).'
+  var hint = EX_3PANE ? 'Click a line in any pane to highlight correlated lines across all three (bridged via the A6 disasm trace).'
                      : 'Click a line in either pane to highlight correlated lines across both. Hover for temporary highlight.';
   if(EX_3PANE && disasmSide!=="vmi") hint += ' Note: MI IR correlates to the VMI trace — switch to “VMI trace” for full correlation.';
   hint += ' MI IR diff is VMI-only (CCE compiles to machine code, not MI IR).';
@@ -3691,7 +3691,7 @@ function exDisasmPane(disasm, tl, sideLabel){
   var side = sideLabel || EX_SIDE.toUpperCase();
   var div = document.createElement("div"); div.className = "ex-pane disasm";
   var unitMode = (EX_DISASM_MODE === "unit");
-  var head = '<div class="ex-pane-head"><span>'+(unitMode ? ("A5 disasm \u00b7 unit\u00b7PC ("+esc(side)+" static)") : ("A5 disasm + ticks ("+esc(side)+" trace)"))+'</span>';
+  var head = '<div class="ex-pane-head"><span>'+(unitMode ? ("A6 disasm \u00b7 unit\u00b7PC ("+esc(side)+" static)") : ("A6 disasm + ticks ("+esc(side)+" trace)"))+'</span>';
   if(tl && tl.vf_real) head += ' <span class="muted">vf_real='+tl.vf_real+'</span>';
   head += ' <span class="ex-disasm-mode">'+
     '<button class="ex-mode-btn'+(unitMode?"":" active")+'" data-dismode="trace" title="Execution order (tick)">\u23f1 Trace</button>'+
