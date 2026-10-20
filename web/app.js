@@ -3042,6 +3042,7 @@ var EX_LEFT = "cce", EX_MIDDLE = "dsl", EX_RIGHT = "vpto";   // default 3-way pa
 var EX_3PANE = true;   // 3-pane layout (CCE|VMI|MI IR) vs 2-pane (any two panes)
 var EX_CROSS_MODE = false;  // A5↔A6 code-diff mode (A5 C++ | A6 C++ | unified diff)
 var EX_PENDING_FILE = null;  // queued by exploreKernel so VIEWS.explorer loads the right bundle
+var EX_PENDING_EXTAB = null;  // ex-tab to auto-select once the explorer renders (e.g. "overview")
 
 // Pane catalog: value → {label, build(disasm,tl,ir)→paneElement}
 // Order = dropdown order. The user picks any two (left + right).
@@ -3178,6 +3179,18 @@ function renderExplorer(){
   wireExplorer(disasm, tl);
   // render Stage-1 siblings (Overview + Critical path DAG) and Stage-2 IDE panel
   renderExStageContent(b);
+
+  // consume a pending ex-tab selection (cross-link from A5↔A6 → per-kernel Overview)
+  if(EX_PENDING_EXTAB){
+    var which = EX_PENDING_EXTAB; EX_PENDING_EXTAB = null;
+    var tb = document.querySelector('.ex-tab[data-extab="'+which+'"]');
+    if(tb){
+      document.querySelectorAll(".ex-tab").forEach(function(t){ t.classList.toggle("active", t===tb); });
+      ["lowering","criticalpath","overview","ide"].forEach(function(t){
+        var p = el("ex-panel-"+t); if(p) p.classList.toggle("active", t===which);
+      });
+    }
+  }
   var leftSel=el("ex-left-sel"), rightSel=el("ex-right-sel"), midSel=el("ex-mid-sel");
   if(leftSel) leftSel.onchange=function(){ EX_LEFT=leftSel.value; renderExplorer(); };
   if(rightSel) rightSel.onchange=function(){ EX_RIGHT=rightSel.value; renderExplorer(); };
@@ -5654,6 +5667,13 @@ function switchCompareSubTab(which){
   });
 }
 
+function openKernelOverview(kernelFull){
+  // cross-link: A5↔A6 → Kernel Lab, landing on that kernel's 📋 Overview tab
+  if(!kernelFull) return;
+  EX_PENDING_EXTAB = "overview";
+  exploreKernel(kernelFull);
+}
+
 /* ---- A5↔A6 Overview (README headline distilled) ---- */
 function simdStats(rows){
   var comp = rows.filter(function(r){ return r.delta != null && r.arch === "A5"; });
@@ -5711,8 +5731,8 @@ function renderOverview(){
 function renderOverviewBars(q, dq){
   var host = el("cmp-ov-bars"); if(!host) return;
   var all = [];
-  q.forEach(function(r){ if(r.delta != null && r.arch === "A5") all.push({label: r.kernel + " " + r.case, delta: r.delta}); });
-  dq.forEach(function(r){ if(r.delta != null && r.arch === "A5") all.push({label: r.kernel + " " + r.case, delta: r.delta}); });
+  q.forEach(function(r){ if(r.delta != null && r.arch === "A5") all.push({label: r.kernel + " " + r.case, delta: r.delta, kernelFull: r.kernel_full}); });
+  dq.forEach(function(r){ if(r.delta != null && r.arch === "A5") all.push({label: r.kernel + " " + r.case, delta: r.delta, kernelFull: r.kernel_full}); });
   if(!all.length){ host.innerHTML = '<p class="empty-state">no Δ data</p>'; return; }
   all.sort(function(a,b){ return a.delta - b.delta; });
   var maxAbs = Math.max.apply(null, all.map(function(d){ return Math.abs(d.delta); })) * 1.12 || 50;
@@ -5729,12 +5749,21 @@ function renderOverviewBars(q, dq){
     var col = d.delta < 0 ? "var(--good)" : "var(--bad)";
     var lx = d.delta < 0 ? x - 5 : x + w + 5;
     var anchor = d.delta < 0 ? "end" : "start";
-    s += '<text x="'+(padL-8)+'" y="'+(y+4)+'" text-anchor="end" fill="var(--muted)" font-size="10.5">'+esc(d.label)+'</text>';
+    s += '<g class="pt-label" data-kernel="'+attrEsc(d.kernelFull || "")+'"><title>open in Kernel Lab → Overview</title>'+
+      '<text x="'+(padL-8)+'" y="'+(y+4)+'" text-anchor="end" fill="var(--muted)" font-size="10.5">'+esc(d.label)+'</text></g>';
     s += '<rect x="'+x+'" y="'+(y-12)+'" width="'+Math.max(w, 1)+'" height="16" rx="3" fill="'+col+'" opacity="0.85"/>';
     s += '<text x="'+lx+'" y="'+(y+4)+'" text-anchor="'+anchor+'" fill="'+col+'" font-size="10.5" font-weight="600">'+simdDeltaStr(d.delta)+'</text>';
   });
   s += '<text x="'+zeroX+'" y="'+(H-3)+'" text-anchor="middle" fill="var(--dim)" font-size="9.5">0% (A5 = A6)</text>';
   host.innerHTML = svgClose(s);
+
+  // click a kernel label → Kernel Lab, that kernel's Overview tab
+  host.querySelectorAll(".pt-label").forEach(function(g){
+    g.addEventListener("click", function(){
+      var k = g.getAttribute("data-kernel");
+      if(k && k !== "null" && k !== "") openKernelOverview(k);
+    });
+  });
 }
 
 function renderOverviewScatter(q, dq){

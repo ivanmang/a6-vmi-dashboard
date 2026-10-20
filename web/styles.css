@@ -1262,3 +1262,6 @@ a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,su
 .ex-diff-legend{margin-left:auto;font-size:10.5px}
 .diff-minus{color:var(--bad);font-weight:700}
 .diff-plus{color:var(--good);font-weight:700}
+.cmp-ov-bars .pt-label{cursor:pointer}
+.cmp-ov-bars .pt-label text{transition:fill .1s}
+.cmp-ov-bars .pt-label:hover text{fill:var(--accent);text-decoration:underline}
