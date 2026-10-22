@@ -674,7 +674,7 @@ aclrtResetDevice+aclFinalize → teardown</pre>
         <summary>📖 How to use this tab — workflow guide</summary>
         <div class="ex-workflow-body">
           <h4>Overview</h4>
-          <p class="muted">Per-kernel workbench with 4 sub-tabs: <strong>🔎 Lowering</strong> (CCE C++ ↔ VMI/DSL Python ↔ MI IR side-by-side), <strong>⛓ DAG</strong> (dependency graph), <strong>📋 Overview</strong> (baseline metrics), and <strong>🔧 Edit &amp; Simulate</strong> (edit the DSL, compile, run the sim).</p>
+          <p class="muted">Per-kernel workbench with 5 sub-tabs: <strong>🔎 Lowering</strong> (CCE C++ ↔ VMI/DSL Python ↔ MI IR side-by-side), <strong>⛓ DAG</strong> (dependency graph), <strong>📋 Overview</strong> (baseline metrics), <strong>📊 IPC</strong> (per-opcode issue rows + IPC line inside the VF window), and <strong>🔧 Edit &amp; Simulate</strong> (edit the DSL, compile, run the sim).</p>
           <div class="ex-alert"><strong>PTOAS is VMI-only.</strong> Editing + re-running affects the <strong>VMI/DSL</strong> side of the kernel. CCE (bisheng) is a separate, fixed compiler — shown for reference, it does not change with your edits. The disasm/timeline shown is the <strong>VMI execution trace</strong>; a CCE disasm is still selectable per-pane if you want to inspect the CCE side.</div>
 
           <h4>Step 1 — Pick a kernel</h4>
@@ -722,6 +722,7 @@ aclrtResetDevice+aclFinalize → teardown</pre>
         <button class="ex-tab active" data-extab="lowering">🔎 Lowering</button>
         <button class="ex-tab" data-extab="criticalpath">⛓ DAG</button>
         <button class="ex-tab" data-extab="overview">📋 Overview</button>
+        <button class="ex-tab" data-extab="ipc">📊 IPC</button>
         <button class="ex-tab" data-extab="ide">🔧 Edit &amp; Simulate <span id="ex-ide-tab-badge" class="ex-toggle-count"></span></button>
       </div>
       <div id="ex-panel-lowering" class="ex-tabpanel active">
@@ -733,6 +734,9 @@ aclrtResetDevice+aclFinalize → teardown</pre>
       </div>
       <div id="ex-panel-overview" class="ex-tabpanel">
         <div id="explorer-overview"></div>
+      </div>
+      <div id="ex-panel-ipc" class="ex-tabpanel">
+        <div id="explorer-ipc"></div>
       </div>
       <div id="ex-panel-ide" class="ex-tabpanel">
         <div id="explorer-ide" class="explorer-ide-host"></div>

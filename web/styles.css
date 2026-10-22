@@ -817,6 +817,19 @@ echo "✓ CSS added"
 .ex-tabs{display:flex;gap:6px;margin:12px 0 0;border-bottom:1px solid var(--border)}
 .ex-tabpanel{display:none;margin-top:12px}
 .ex-tabpanel.active{display:block}
+/* ---- IPC timeline (Kernel Lab → 📊 IPC) ---- */
+.ipc-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 10px}
+.ipc-scalar{font-size:13px;color:var(--text-strong)}
+.ipc-scalar b{font-size:15px;color:var(--accent)}
+.ipc-picker{display:inline-flex;gap:4px;align-items:center}
+.ipc-btn{background:var(--surface-0);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:2px 9px;font-size:11px;cursor:pointer;font-family:var(--mono)}
+.ipc-btn:hover{color:var(--text);background:rgba(13,21,36,.04)}
+.ipc-btn.active{color:var(--text-strong);border-color:var(--accent);background:rgba(20,184,166,.12)}
+.ipc-bin{font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:5px}
+.ipc-bin input{width:58px;background:var(--surface-0);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:2px 6px;font-family:var(--mono);font-size:11px}
+.ipc-svg-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface-0);padding:8px 4px}
+.ipc-svg{display:block;min-width:820px}
+.ipc-row:hover{filter:brightness(0.97)}
 
 /* Explorer Stage 2 — IDE toggle */
 

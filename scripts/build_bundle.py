@@ -16,6 +16,8 @@ Usage:
 import os, re, sys, json, argparse, subprocess, tempfile
 from collections import defaultdict
 
+import instr_ipc  # same dir: issue-rows + IPC-line payload for the VF window
+
 # ---------------------------------------------------------------------------
 # dump parser (adapted from ca_instr_analysis.py — LINE_RE + record collection)
 # ---------------------------------------------------------------------------
@@ -547,18 +549,16 @@ def main():
     llvm_lines = llvm_text.splitlines() if llvm_text else []
 
     # --- 6. parse dumps ---
-    def load_dump(side):
+    def dump_dir(side):
         if args.arch == "a6":
             sub = "a6_vmi_logs" if side == "vmi" else "a6_cce_logs"
-            dpath = os.path.join(repo, "logs", sub, args.kernel,
-                                 "core0.veccore0.instr_log.dump")
-        elif side == "vmi":
-            dpath = os.path.join(repo, "logs", "run_vmi_30k", args.kernel,
-                                 "core0.veccore0.instr_log.dump")
-        else:
-            dpath = os.path.join(repo, "logs", "run_cce_30k", args.case,
-                                 "core0.veccore0.instr_log.dump")
-        return parse_dump(dpath)
+            return os.path.join(repo, "logs", sub, args.kernel)
+        if side == "vmi":
+            return os.path.join(repo, "logs", "run_vmi_30k", args.kernel)
+        return os.path.join(repo, "logs", "run_cce_30k", args.case)
+
+    def load_dump(side):
+        return parse_dump(os.path.join(dump_dir(side), "core0.veccore0.instr_log.dump"))
 
     # primary side for correlation
     primary_side = "vmi" if args.side in ("vmi", "both") else "cce"
@@ -648,6 +648,15 @@ def main():
     dsl_filename = os.path.basename(dsl_py_file) if dsl_py_file else ""
     tags = derive_tags(args.kernel, args.case, vmi_op_counts, mlir_text, dsl_filename, repo)
     bundle["tags"] = tags
+
+    # --- 7c. instruction-vs-IPC payload (VF-window issue rows + IPC line) ---
+    bundle["ipc"] = None
+    if args.side == "both":
+        bundle["ipc_vmi"] = instr_ipc.compute_for_bundle(dump_dir("vmi")) or None
+        bundle["ipc_cce"] = instr_ipc.compute_for_bundle(dump_dir("cce")) or None
+        bundle["ipc"] = bundle["ipc_vmi"] or bundle["ipc_cce"]
+    else:
+        bundle["ipc"] = instr_ipc.compute_for_bundle(dump_dir(primary_side)) or None
 
     os.makedirs(args.out, exist_ok=True)
     # sanitize case for filename

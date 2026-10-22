@@ -1905,6 +1905,7 @@ function renderExIde(b){
 function renderExStageContent(b){
   renderExFactStrip(b);
   renderExOverview(b);
+  renderExIpc(b);
   renderExplorerDag();
   renderExIde(b);
   if(EX_PENDING_TAB){ var t=EX_PENDING_TAB; EX_PENDING_TAB=null; switchExTab(t); }
@@ -1936,6 +1937,8 @@ function renderExFactStrip(b){
   if(cceVf!=null) chips.push('<span class="ex-fact" title="CCE vf_real (cycles)"><b>CCE</b> '+cceVf+'c</span>');
   if(vmiVf!=null) chips.push('<span class="ex-fact" title="VMI vf_real (cycles)"><b>VMI</b> '+vmiVf+'c</span>');
   if(st.rv_instr_count!=null) chips.push('<span class="ex-fact" title="RVEC executed instruction count"><b>RVEC</b> '+st.rv_instr_count+'</span>');
+  var ip = ipcAnyKind(ipcSource(b, ""));
+  if(ip) chips.push('<span class="ex-fact" title="issue IPC inside the VF window (issues ÷ VF ticks)"><b>IPC</b> '+ip.pay.ipc.toFixed(2)+'</span>');
   if(stalls!=null) chips.push('<span class="ex-fact" title="stall count"><b>stalls</b> '+stalls+'</span>');
   (b.tags&&b.tags.compute_pattern||[]).slice(0,3).forEach(function(t){ chips.push('<span class="ex-fact tag" title="compute pattern">'+esc(t)+'</span>'); });
   var base = exEditBadge() + (chips.join('') || '<span class="muted small">select a kernel…</span>');
@@ -1948,6 +1951,130 @@ function renderExFactStrip(b){
     if(d.critical_path!=null) extra += '<span class="ex-fact cp" title="critical path (longest RAW-dependency chain, cycles)">⛓ critical path '+d.critical_path+'c</span>';
     if(d.excluded) extra += '<span class="ex-fact excl" title="'+esc(d.excluded_reason||'excluded')+'">⚠ excluded</span>';
     if(extra) host.innerHTML = base + extra;
+  });
+}
+// ---- Instruction-vs-IPC chart (per-kernel VF window: issue rows + IPC line) ----
+var IPC_COLORS = ["#1f4e79","#8fb4d4","#1a7a7a","#e07a1f","#1b5e20","#7cb342","#5c4e78","#c45c26","#3d5a80","#6b4c7a","#b5b5b5","#888888"];
+var IPC_BAND_O = "rgba(13,21,36,0.04)";
+var IPC_BAND_E = "rgba(0,0,0,0)";
+var IPC_LABEL = "#1b2432";
+var IPC_COUNT = "#5b6b82";
+var IPC_GRID = "rgba(13,21,36,0.08)";
+var IPC_BASE = "rgba(13,21,36,0.22)";
+var IPC_LINE = "#0f766e";
+function ipcSource(b, side){
+  if(side && b["ipc_"+side]) return b["ipc_"+side];
+  if(b.ipc) return b.ipc;
+  return b.ipc_vmi || b.ipc_cce || null;
+}
+function ipcAnyKind(src){
+  if(!src) return null;
+  if(src.simd) return {kind:"simd", pay:src.simd};
+  if(src.simt) return {kind:"simt", pay:src.simt};
+  return null;
+}
+function ipcRebin(pay, W){
+  var vf = pay.vf, ticks = pay.ticks || [];
+  var n = Math.max(1, Math.ceil(vf/W));
+  var c = new Array(n).fill(0);
+  for(var i=0;i<ticks.length;i++){ var t=ticks[i]; if(t>=0 && t<vf) c[Math.floor(t/W)]++; }
+  var xs=[], ys=[];
+  for(var i=0;i<n;i++){ var lo=i*W, hi=Math.min(vf,(i+1)*W), w=hi-lo; xs.push(lo+w/2); ys.push(c[i]/w); }
+  return {xs:xs, ys:ys};
+}
+function renderExIpc(b){
+  var host = el("explorer-ipc");
+  if(!host) return;
+  var sideNames = [];
+  if(b.ipc_vmi) sideNames.push("vmi");
+  if(b.ipc_cce) sideNames.push("cce");
+  if(!EX_IPC.side || sideNames.indexOf(EX_IPC.side) < 0) EX_IPC.side = sideNames.length ? sideNames[0] : "";
+  var src = EX_IPC.side ? (b["ipc_"+EX_IPC.side] || b.ipc) : (b.ipc || b.ipc_vmi || b.ipc_cce);
+  var kindNames = [];
+  if(src && src.simd) kindNames.push("simd");
+  if(src && src.simt) kindNames.push("simt");
+  if(!kindNames.length){
+    host.innerHTML = '<div class="ex-ov-card"><div class="ex-ov-title">IPC timeline</div><div class="muted small">No instruction/issue trace beside this bundle — no <code>instr.bin</code> or <code>instr_popped_log.dump</code> + <code>instr_log.dump</code> pair was captured, so no VF window could be computed.</div></div>';
+    return;
+  }
+  if(kindNames.indexOf(EX_IPC.kind) < 0) EX_IPC.kind = kindNames[0];
+  var pay = src[EX_IPC.kind];
+  if(!EX_IPC.bin) EX_IPC.bin = pay.bin || 20;
+  var W = EX_IPC.bin;
+  var vf = pay.vf;
+  var line = ipcRebin(pay, W);
+
+  var tb = '<div class="ipc-toolbar">'+
+    '<span class="ipc-scalar">IPC <b>'+pay.ipc.toFixed(2)+'</b><span class="muted small"> = '+pay.issues+' issues ÷ '+vf+' ticks</span></span>';
+  if(sideNames.length>1){
+    tb += '<span class="ipc-picker">'+sideNames.map(function(s){ return '<button class="ipc-btn'+(EX_IPC.side===s?' active':'')+'" data-side="'+s+'">'+s.toUpperCase()+'</button>'; }).join('')+'</span>';
+  }
+  if(kindNames.length>1){
+    tb += '<span class="ipc-picker">'+kindNames.map(function(k){ return '<button class="ipc-btn'+(EX_IPC.kind===k?' active':'')+'" data-kind="'+k+'">'+k.toUpperCase()+'</button>'; }).join('')+'</span>';
+  }
+  tb += '<label class="ipc-bin">bin <input type="number" id="ipc-bin" min="1" step="1" value="'+W+'"> ticks</label></div>';
+
+  var ROW_H = 15, LABEL_W = 88, COUNT_W = 46, PLOT_W = 760, TOP = 8, IPC_H = 112, GAP = 18, XLABEL_H = 22;
+  var rows = pay.rows || [];
+  var n = rows.length;
+  var W_svg = LABEL_W + PLOT_W + COUNT_W;
+  var H_svg = TOP + n*ROW_H + GAP + IPC_H + XLABEL_H;
+  var R = function(v){ return (Math.round(v*100)/100); };
+  var sx = function(t){ return LABEL_W + t * PLOT_W / vf; };
+  var hidden = EX_IPC.hidden || {};
+  var parts = [];
+
+  for(var i=0;i<n;i++){
+    var r = rows[i];
+    var y0 = TOP + i*ROW_H, cy = y0 + ROW_H/2;
+    var isHid = !!hidden[r.op];
+    var col = IPC_COLORS[i % IPC_COLORS.length];
+    parts.push('<rect class="ipc-row" data-op="'+esc(r.op)+'" x="0" y="'+R(y0)+'" width="'+W_svg+'" height="'+ROW_H+'" fill="'+(i%2===0?IPC_BAND_O:IPC_BAND_E)+'" fill-opacity="'+(isHid?0.5:1)+'"/>');
+    parts.push('<text class="ipc-rowlbl" data-op="'+esc(r.op)+'" x="'+(LABEL_W-6)+'" y="'+R(cy+3.5)+'" text-anchor="end" font-size="9" fill="'+(isHid?'#8392a6':IPC_LABEL)+'"'+(isHid?' style="text-decoration:line-through"':'')+'>'+esc(r.label)+'</text>');
+    if(!isHid){
+      var tks = r.ticks || [];
+      for(var j=0;j<tks.length;j++) parts.push('<line x1="'+R(sx(tks[j]))+'" y1="'+R(cy-4.5)+'" x2="'+R(sx(tks[j]))+'" y2="'+R(cy+4.5)+'" stroke="'+col+'" stroke-width="0.7"/>');
+    }
+    parts.push('<text x="'+(LABEL_W+PLOT_W+6)+'" y="'+R(cy+3.5)+'" text-anchor="start" font-size="8.5" fill="'+IPC_COUNT+'">×'+r.n+'</text>');
+  }
+
+  var iy0 = TOP + n*ROW_H + GAP, iy1 = iy0 + IPC_H;
+  var maxY = Math.max(4, (line.ys.length ? Math.max.apply(null, line.ys) : 0) + 0.4);
+  var syy = function(y){ return iy1 - (y/maxY)*IPC_H; };
+  parts.push('<line x1="'+LABEL_W+'" y1="'+R(iy0)+'" x2="'+(LABEL_W+PLOT_W)+'" y2="'+R(iy0)+'" stroke="'+IPC_BASE+'" stroke-width="1"/>');
+  for(var g=1; g<=4; g++){ var gy = iy0 + (g/4)*IPC_H; parts.push('<line x1="'+LABEL_W+'" y1="'+R(gy)+'" x2="'+(LABEL_W+PLOT_W)+'" y2="'+R(gy)+'" stroke="'+IPC_GRID+'" stroke-width="0.7"/>'); }
+  parts.push('<text x="8" y="'+R(iy0-4)+'" font-size="9" fill="'+IPC_COUNT+'">IPC</text>');
+  if(line.xs.length){
+    var px = line.xs, py = line.ys;
+    var dFill = 'M'+R(sx(px[0]))+' '+R(iy0);
+    for(var k=0;k<px.length;k++) dFill += ' L'+R(sx(px[k]))+' '+R(syy(py[k]));
+    dFill += ' L'+R(sx(px[px.length-1]))+' '+R(iy0)+' Z';
+    parts.push('<path d="'+dFill+'" fill="'+IPC_LINE+'" fill-opacity="0.16" stroke="none"/>');
+    var dLine = '';
+    for(var k2=0;k2<px.length;k2++) dLine += (k2?'L':'M')+R(sx(px[k2]))+' '+R(syy(py[k2]));
+    parts.push('<path d="'+dLine+'" fill="none" stroke="'+IPC_LINE+'" stroke-width="1.15"/>');
+  }
+  parts.push('<text x="'+LABEL_W+'" y="'+R(iy1+XLABEL_H-2)+'" font-size="9" fill="'+IPC_COUNT+'">0</text>');
+  parts.push('<text x="'+(LABEL_W+PLOT_W)+'" y="'+R(iy1+XLABEL_H-2)+'" text-anchor="end" font-size="9" fill="'+IPC_COUNT+'">'+vf+'</text>');
+  parts.push('<text x="'+(LABEL_W+PLOT_W/2)+'" y="'+R(iy1+XLABEL_H-2)+'" text-anchor="middle" font-size="9" fill="'+IPC_COUNT+'">tick inside the VF window</text>');
+
+  host.innerHTML = tb + '<div class="ipc-svg-wrap"><svg class="ipc-svg" viewBox="0 0 '+W_svg+' '+H_svg+'" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">'+parts.join('')+'</svg></div>';
+
+  host.querySelectorAll(".ipc-btn[data-side]").forEach(function(btn){
+    btn.addEventListener("click", function(){ EX_IPC.side = btn.getAttribute("data-side"); renderExIpc(b); });
+  });
+  host.querySelectorAll(".ipc-btn[data-kind]").forEach(function(btn){
+    btn.addEventListener("click", function(){ EX_IPC.kind = btn.getAttribute("data-kind"); renderExIpc(b); });
+  });
+  var bin = el("ipc-bin");
+  if(bin) bin.addEventListener("change", function(){ var v = parseInt(bin.value,10); EX_IPC.bin = (v>=1)?v:20; renderExIpc(b); });
+  host.querySelectorAll(".ipc-row, .ipc-rowlbl").forEach(function(node){
+    node.style.cursor = "pointer";
+    node.addEventListener("click", function(){
+      var op = node.getAttribute("data-op");
+      if(EX_IPC.hidden[op]) delete EX_IPC.hidden[op]; else EX_IPC.hidden[op] = 1;
+      renderExIpc(b);
+    });
   });
 }
 // Extract syntax/compile error lines from a raw log blob (ECSs is noisy).
@@ -2885,6 +3012,7 @@ function blockMd(ln, lines, i){
 /* ---------------- EXPLORER (compiler-explorer-style) ---------------- */
 var EX_MANIFEST = null;
 var EX_BUNDLE = null;
+var EX_IPC = {side:null, kind:null, bin:null, hidden:{}};  // IPC timeline UI state (side/kind/bin/hidden rows)
 var EX_PENDING_TAB = null;
 var EX_IR_TAB = "mlir";
 var EX_ACTIVE_LINE = null;
@@ -3008,7 +3136,7 @@ VIEWS.explorer = function(){
     var b = e.target.closest(".ex-tab"); if(!b) return;
     document.querySelectorAll(".ex-tab").forEach(function(t){ t.classList.toggle("active", t===b); });
     var which = b.getAttribute("data-extab");
-    ["lowering","criticalpath","overview","ide"].forEach(function(t){
+    ["lowering","criticalpath","overview","ipc","ide"].forEach(function(t){
       var p = el("ex-panel-"+t); if(p) p.classList.toggle("active", t===which);
     });
   });
@@ -3032,6 +3160,7 @@ function loadBundle(file){
   EX_ORIGINAL = {};       // reset original-source cache (new kernel = new original)
   EX_EDITED = {};         // clear any edits from the previous kernel
   EX_BUNDLE_EDITED = false; // fresh kernel = original bundle
+  EX_IPC = {side:null, kind:null, bin:null, hidden:{}}; // reset IPC timeline state for the new kernel
   fetch("explorer/"+file)
     .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(b){ EX_BUNDLE = b; EX_SIDE = b.primary_side||"vmi"; if(status) status.textContent=""; renderExplorer(); })
@@ -3186,7 +3315,7 @@ function renderExplorer(){
     var tb = document.querySelector('.ex-tab[data-extab="'+which+'"]');
     if(tb){
       document.querySelectorAll(".ex-tab").forEach(function(t){ t.classList.toggle("active", t===tb); });
-      ["lowering","criticalpath","overview","ide"].forEach(function(t){
+      ["lowering","criticalpath","overview","ipc","ide"].forEach(function(t){
         var p = el("ex-panel-"+t); if(p) p.classList.toggle("active", t===which);
       });
     }
