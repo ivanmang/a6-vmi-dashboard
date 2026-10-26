@@ -249,6 +249,22 @@ for i in "${!CASES[@]}"; do
     fi
   fi
 
+  # Issue (popped) dump — the IPC-timeline issue source (sits beside instr_log.dump).
+  for dump_path in \
+    "${build_dir}/log_ca/core0.veccore0.instr_popped_log.dump" \
+    "${build_dir}/bin/camodel_log/core0.veccore0.instr_popped_log.dump" \
+    "${build_dir}/camodel_log/core0.veccore0.instr_popped_log.dump" \
+    "${build_dir}/core0.veccore0.instr_popped_log.dump" \
+    "${build_dir}/log_ca/core0.vector_core0.instr_popped_log.dump" \
+    "${build_dir}/bin/camodel_log/core0.vector_core0.instr_popped_log.dump"
+  do
+    if [[ -f "$dump_path" ]]; then
+      cp -f "$dump_path" "${case_log_dir}/core0.veccore0.instr_popped_log.dump" 2>/dev/null
+      break
+    fi
+  done
+  [[ -f "$build_dir/instr.bin" ]] && cp -f "$build_dir/instr.bin" "$case_log_dir/" 2>/dev/null
+
   # Extract vf_real
   instr_dump="${case_log_dir}/core0.veccore0.instr_log.dump"
   if [[ -f "$instr_dump" ]]; then

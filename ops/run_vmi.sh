@@ -347,9 +347,22 @@ for i in "${!CASES[@]}"; do
     fi
   fi
 
+  # Issue (popped) dump — the IPC-timeline issue source (sits beside instr_log.dump).
+  for pp in \
+    "${case_log_dir}/log_ca/core0.veccore0.instr_popped_log.dump" \
+    "${case_log_dir}/core0.veccore0.instr_popped_log.dump" \
+    "${case_log_dir}/core0.vector_core0.instr_popped_log.dump"
+  do
+    if [[ -f "$pp" ]] && [[ -s "$pp" ]]; then
+      cp -f "$pp" "${case_log_dir}/core0.veccore0.instr_popped_log.dump" 2>/dev/null
+      break
+    fi
+  done
+
   # Clean up other dump files (VMI produces hundreds)
   find "$case_log_dir" -maxdepth 1 -name 'core*.dump' \
     ! -name 'core0.veccore0.instr_log.dump' \
+    ! -name 'core0.veccore0.instr_popped_log.dump' \
     -delete 2>/dev/null || true
   rm -f "$case_log_dir"/core[0-9]*.veccore1* \
         "$case_log_dir"/core[0-9]*.cubecore* \
