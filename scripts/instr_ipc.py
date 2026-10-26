@@ -131,6 +131,30 @@ def load_entries(trace_dir):
     return _decode_text(td)
 
 
+def _read_busy_cycles(trace_dir):
+    """Parse core0_summary_log → {"simd": ticks, "simt": ticks} (rvec busy cycles).
+
+    The 9.1.0 camodel text dumps record the VF completion in the retire log for
+    plain VF (SIMD) but not for VF_SIMT (SIMT), so the VF_SIMT window width has
+    to come from the summary log's rvec_veccore0_simt_busy_cycle.
+    """
+    path = Path(trace_dir) / "core0_summary_log"
+    if not path.is_file():
+        return {}
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    out = {}
+    m = re.search(r"rvec_veccore0_simd_busy_cycle\s*\|\s*(\d+)", text)
+    if m:
+        out["simd"] = int(m.group(1))
+    m = re.search(r"rvec_veccore0_simt_busy_cycle\s*\|\s*(\d+)", text)
+    if m:
+        out["simt"] = int(m.group(1))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # window / rows / ipc — match the chart spec exactly
 # ---------------------------------------------------------------------------
@@ -140,7 +164,7 @@ def _vec(entries, is_popped):
             if e["core"] == VEC_CORE and e["sub"] == VEC_SUB and e["is_popped"] == is_popped]
 
 
-def window(entries, kind):
+def window(entries, kind, busy_cycles=None):
     """Return (ticks, ops) for one kind ("simd"|"simt"). ops = [(t, opcode), ...].
 
     ticks = done - issue (the VF window width). ops = every *issue* inside the
@@ -153,6 +177,10 @@ def window(entries, kind):
         return None, None
     issue = next((e["time"] for e in issues if e["op"] == vf_name), None)
     done = next((e["time"] for e in _vec(entries, 0) if e["op"] == vf_name), None)
+    if done is None and busy_cycles and issue is not None:
+        bc = busy_cycles.get(kind)
+        if bc:
+            done = issue + bc  # camodel text dumps omit the VF_SIMT completion
     if issue is None or done is None or done <= issue:
         return None, None
     ticks = done - issue
@@ -197,8 +225,8 @@ def ipc_line(ops, ticks, width):
 # bundle payload (consumed by web/app.js renderExIpc)
 # ---------------------------------------------------------------------------
 
-def _payload(entries, kind, bin_width=20):
-    ticks, ops = window(entries, kind)
+def _payload(entries, kind, bin_width=20, busy_cycles=None):
+    ticks, ops = window(entries, kind, busy_cycles)
     if ticks is None or ops is None or ticks <= 0:
         return None
     rows = rows_from(ops)
@@ -225,9 +253,10 @@ def compute_for_bundle(trace_dir, bin_width=20):
     entries = load_entries(trace_dir)
     if not entries:
         return {}
+    busy_cycles = _read_busy_cycles(trace_dir)
     out = {}
     for kind in ("simd", "simt"):
-        payload = _payload(entries, kind, bin_width)
+        payload = _payload(entries, kind, bin_width, busy_cycles)
         if payload:
             out[kind] = payload
     return out
