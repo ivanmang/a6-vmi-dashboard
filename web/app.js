@@ -1982,6 +1982,69 @@ function ipcRebin(pay, W){
   for(var i=0;i<n;i++){ var lo=i*W, hi=Math.min(vf,(i+1)*W), w=hi-lo; xs.push(lo+w/2); ys.push(c[i]/w); }
   return {xs:xs, ys:ys};
 }
+function ipcSvg(pay, W, hidden){
+  // Shared SVG for the instruction-vs-IPC chart (Kernel Lab + TileLang drawer).
+  var ROW_H=16, GUT=128, DENS_W=56, PLOT_W=720, TOP=8, IPC_H=118, GAP=20, XLABEL_H=28, RIGHT=10;
+  var PLOT_L = GUT + DENS_W;
+  var rows = pay.rows || [];
+  var n = rows.length;
+  var vf = pay.vf;
+  var line = ipcRebin(pay, W);
+  var maxN = 0;
+  for(var i=0;i<n;i++){ if(rows[i].n > maxN) maxN = rows[i].n; }
+  var W_svg = PLOT_L + PLOT_W + RIGHT;
+  var H_svg = TOP + n*ROW_H + GAP + IPC_H + XLABEL_H;
+  var R = function(v){ return Math.round(v*100)/100; };
+  var sx = function(t){ return PLOT_L + t * PLOT_W / vf; };
+  var p = [];
+  for(var i=0;i<n;i++){
+    var r = rows[i];
+    var y0 = TOP + i*ROW_H, cy = y0 + ROW_H/2;
+    var hid = hidden && hidden[r.op];
+    var col = IPC_COLORS[i % IPC_COLORS.length];
+    p.push('<rect class="ipc-row" data-op="'+esc(r.op)+'" x="0" y="'+R(y0)+'" width="'+W_svg+'" height="'+ROW_H+'" fill="'+(i%2===0?IPC_BAND_O:IPC_BAND_E)+'" fill-opacity="'+(hid?0.5:1)+'"/>');
+    var lbl = r.label.length > 18 ? r.label.slice(0,17)+'…' : r.label;
+    p.push('<text class="ipc-rowlbl" data-op="'+esc(r.op)+'" x="8" y="'+R(cy+3.5)+'" font-size="10" fill="'+(hid?'#8392a6':IPC_LABEL)+'"'+(hid?' style="text-decoration:line-through"':'')+'>'+esc(lbl)+'</text>');
+    var cw = 22 + String(r.n).length*5.5, cxl = GUT - cw - 6;
+    p.push('<rect x="'+R(cxl)+'" y="'+R(cy-6.5)+'" width="'+R(cw)+'" height="13" rx="6.5" fill="rgba(127,127,127,0.14)"/>');
+    p.push('<text x="'+R(cxl+cw/2)+'" y="'+R(cy+3)+'" text-anchor="middle" font-size="8.5" fill="'+IPC_COUNT+'">×'+r.n+'</text>');
+    var densW = DENS_W - 16, dx = GUT + 6;
+    p.push('<rect x="'+R(dx)+'" y="'+R(cy-2)+'" width="'+R(densW)+'" height="4" rx="2" fill="rgba(127,127,127,0.22)"/>');
+    if(!hid && maxN){ p.push('<rect x="'+R(dx)+'" y="'+R(cy-2)+'" width="'+R(Math.max(2, densW*r.n/maxN))+'" height="4" rx="2" fill="'+col+'" fill-opacity="0.75"/>'); }
+    if(!hid){ var tks = r.ticks||[]; for(var j=0;j<tks.length;j++) p.push('<line x1="'+R(sx(tks[j]))+'" y1="'+R(cy-4.5)+'" x2="'+R(sx(tks[j]))+'" y2="'+R(cy+4.5)+'" stroke="'+col+'" stroke-width="0.7"/>'); }
+  }
+  var iy0 = TOP + n*ROW_H + GAP, iy1 = iy0 + IPC_H;
+  var maxY = Math.max(4, (line.ys.length ? Math.max.apply(null, line.ys) : 0) + 0.4);
+  var syy = function(y){ return iy1 - (y/maxY)*IPC_H; };
+  var tf = function(y){ return (y === 0) ? "0" : (y >= 10 ? y.toFixed(0) : y.toFixed(1)); };
+  p.push('<line x1="'+PLOT_L+'" y1="'+R(iy0)+'" x2="'+(PLOT_L+PLOT_W)+'" y2="'+R(iy0)+'" stroke="'+IPC_BASE+'" stroke-width="1"/>');
+  [0, maxY/2, maxY].forEach(function(yv){
+    var yy = syy(yv);
+    if(yv > 0.0001) p.push('<line x1="'+PLOT_L+'" y1="'+R(yy)+'" x2="'+(PLOT_L+PLOT_W)+'" y2="'+R(yy)+'" stroke="'+IPC_GRID+'" stroke-width="0.7"/>');
+    p.push('<text x="'+(PLOT_L-6)+'" y="'+R(yy+3)+'" text-anchor="end" font-size="8" fill="'+IPC_COUNT+'">'+tf(yv)+'</text>');
+  });
+  p.push('<text x="8" y="'+R(iy0-4)+'" font-size="9" fill="'+IPC_COUNT+'">IPC</text>');
+  if(line.xs.length){
+    var px = line.xs, py = line.ys;
+    var dFill = 'M'+R(sx(px[0]))+' '+R(iy0);
+    for(var k=0;k<px.length;k++) dFill += ' L'+R(sx(px[k]))+' '+R(syy(py[k]));
+    dFill += ' L'+R(sx(px[px.length-1]))+' '+R(iy0)+' Z';
+    p.push('<path d="'+dFill+'" fill="'+IPC_LINE+'" fill-opacity="0.16" stroke="none"/>');
+    var dLine = '';
+    for(var k2=0;k2<px.length;k2++) dLine += (k2?'L':'M')+R(sx(px[k2]))+' '+R(syy(py[k2]));
+    p.push('<path d="'+dLine+'" fill="none" stroke="'+IPC_LINE+'" stroke-width="1.15"/>');
+  }
+  p.push('<line x1="'+PLOT_L+'" y1="'+R(syy(pay.ipc))+'" x2="'+(PLOT_L+PLOT_W)+'" y2="'+R(syy(pay.ipc))+'" stroke="'+IPC_LINE+'" stroke-width="1" stroke-dasharray="4 3" stroke-opacity="0.5"/>');
+  p.push('<text x="'+(PLOT_L+PLOT_W-4)+'" y="'+R(syy(pay.ipc)-3)+'" text-anchor="end" font-size="8" fill="'+IPC_COUNT+'">avg '+pay.ipc.toFixed(2)+'</text>');
+  [0, 0.25, 0.5, 0.75, 1].forEach(function(f){
+    var xx = sx(vf*f);
+    var lbl = f===0 ? "0" : (f===1 ? String(vf) : Math.round(f*100)+"%");
+    p.push('<line x1="'+R(xx)+'" y1="'+R(iy1)+'" x2="'+R(xx)+'" y2="'+R(iy1+3)+'" stroke="'+IPC_BASE+'" stroke-width="0.7"/>');
+    p.push('<text x="'+R(xx)+'" y="'+R(iy1+11)+'" text-anchor="middle" font-size="8" fill="'+IPC_COUNT+'">'+lbl+'</text>');
+  });
+  p.push('<text x="'+(PLOT_L+PLOT_W/2)+'" y="'+R(iy1+23)+'" text-anchor="middle" font-size="8.5" fill="'+IPC_COUNT+'">tick inside the VF window</text>');
+  return '<div class="ipc-svg-wrap"><svg class="ipc-svg" viewBox="0 0 '+W_svg+' '+H_svg+'" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">'+p.join('')+'</svg></div>';
+}
 function renderExIpc(b){
   var host = el("explorer-ipc");
   if(!host) return;
@@ -2002,7 +2065,6 @@ function renderExIpc(b){
   if(!EX_IPC.bin) EX_IPC.bin = pay.bin || 20;
   var W = EX_IPC.bin;
   var vf = pay.vf;
-  var line = ipcRebin(pay, W);
 
   var tb = '<div class="ipc-toolbar">'+
     '<span class="ipc-scalar">IPC <b>'+pay.ipc.toFixed(2)+'</b><span class="muted small"> = '+pay.issues+' issues ÷ '+vf+' ticks</span></span>';
@@ -2014,51 +2076,8 @@ function renderExIpc(b){
   }
   tb += '<label class="ipc-bin">bin <input type="number" id="ipc-bin" min="1" step="1" value="'+W+'"> ticks</label></div>';
 
-  var ROW_H = 15, LABEL_W = 88, COUNT_W = 46, PLOT_W = 760, TOP = 8, IPC_H = 112, GAP = 18, XLABEL_H = 22;
-  var rows = pay.rows || [];
-  var n = rows.length;
-  var W_svg = LABEL_W + PLOT_W + COUNT_W;
-  var H_svg = TOP + n*ROW_H + GAP + IPC_H + XLABEL_H;
-  var R = function(v){ return (Math.round(v*100)/100); };
-  var sx = function(t){ return LABEL_W + t * PLOT_W / vf; };
   var hidden = EX_IPC.hidden || {};
-  var parts = [];
-
-  for(var i=0;i<n;i++){
-    var r = rows[i];
-    var y0 = TOP + i*ROW_H, cy = y0 + ROW_H/2;
-    var isHid = !!hidden[r.op];
-    var col = IPC_COLORS[i % IPC_COLORS.length];
-    parts.push('<rect class="ipc-row" data-op="'+esc(r.op)+'" x="0" y="'+R(y0)+'" width="'+W_svg+'" height="'+ROW_H+'" fill="'+(i%2===0?IPC_BAND_O:IPC_BAND_E)+'" fill-opacity="'+(isHid?0.5:1)+'"/>');
-    parts.push('<text class="ipc-rowlbl" data-op="'+esc(r.op)+'" x="'+(LABEL_W-6)+'" y="'+R(cy+3.5)+'" text-anchor="end" font-size="9" fill="'+(isHid?'#8392a6':IPC_LABEL)+'"'+(isHid?' style="text-decoration:line-through"':'')+'>'+esc(r.label)+'</text>');
-    if(!isHid){
-      var tks = r.ticks || [];
-      for(var j=0;j<tks.length;j++) parts.push('<line x1="'+R(sx(tks[j]))+'" y1="'+R(cy-4.5)+'" x2="'+R(sx(tks[j]))+'" y2="'+R(cy+4.5)+'" stroke="'+col+'" stroke-width="0.7"/>');
-    }
-    parts.push('<text x="'+(LABEL_W+PLOT_W+6)+'" y="'+R(cy+3.5)+'" text-anchor="start" font-size="8.5" fill="'+IPC_COUNT+'">×'+r.n+'</text>');
-  }
-
-  var iy0 = TOP + n*ROW_H + GAP, iy1 = iy0 + IPC_H;
-  var maxY = Math.max(4, (line.ys.length ? Math.max.apply(null, line.ys) : 0) + 0.4);
-  var syy = function(y){ return iy1 - (y/maxY)*IPC_H; };
-  parts.push('<line x1="'+LABEL_W+'" y1="'+R(iy0)+'" x2="'+(LABEL_W+PLOT_W)+'" y2="'+R(iy0)+'" stroke="'+IPC_BASE+'" stroke-width="1"/>');
-  for(var g=1; g<=4; g++){ var gy = iy0 + (g/4)*IPC_H; parts.push('<line x1="'+LABEL_W+'" y1="'+R(gy)+'" x2="'+(LABEL_W+PLOT_W)+'" y2="'+R(gy)+'" stroke="'+IPC_GRID+'" stroke-width="0.7"/>'); }
-  parts.push('<text x="8" y="'+R(iy0-4)+'" font-size="9" fill="'+IPC_COUNT+'">IPC</text>');
-  if(line.xs.length){
-    var px = line.xs, py = line.ys;
-    var dFill = 'M'+R(sx(px[0]))+' '+R(iy0);
-    for(var k=0;k<px.length;k++) dFill += ' L'+R(sx(px[k]))+' '+R(syy(py[k]));
-    dFill += ' L'+R(sx(px[px.length-1]))+' '+R(iy0)+' Z';
-    parts.push('<path d="'+dFill+'" fill="'+IPC_LINE+'" fill-opacity="0.16" stroke="none"/>');
-    var dLine = '';
-    for(var k2=0;k2<px.length;k2++) dLine += (k2?'L':'M')+R(sx(px[k2]))+' '+R(syy(py[k2]));
-    parts.push('<path d="'+dLine+'" fill="none" stroke="'+IPC_LINE+'" stroke-width="1.15"/>');
-  }
-  parts.push('<text x="'+LABEL_W+'" y="'+R(iy1+XLABEL_H-2)+'" font-size="9" fill="'+IPC_COUNT+'">0</text>');
-  parts.push('<text x="'+(LABEL_W+PLOT_W)+'" y="'+R(iy1+XLABEL_H-2)+'" text-anchor="end" font-size="9" fill="'+IPC_COUNT+'">'+vf+'</text>');
-  parts.push('<text x="'+(LABEL_W+PLOT_W/2)+'" y="'+R(iy1+XLABEL_H-2)+'" text-anchor="middle" font-size="9" fill="'+IPC_COUNT+'">tick inside the VF window</text>');
-
-  host.innerHTML = tb + '<div class="ipc-svg-wrap"><svg class="ipc-svg" viewBox="0 0 '+W_svg+' '+H_svg+'" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">'+parts.join('')+'</svg></div>';
+  host.innerHTML = tb + ipcSvg(pay, W, hidden);
 
   host.querySelectorAll(".ipc-btn[data-side]").forEach(function(btn){
     btn.addEventListener("click", function(){ EX_IPC.side = btn.getAttribute("data-side"); renderExIpc(b); });
