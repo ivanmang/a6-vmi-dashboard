@@ -1962,6 +1962,8 @@ var IPC_COUNT = "#5b6b82";
 var IPC_GRID = "rgba(13,21,36,0.08)";
 var IPC_BASE = "rgba(13,21,36,0.22)";
 var IPC_LINE = "#0f766e";
+var IPC_GOOD = "#4ade80";
+var IPC_BAD = "#f87171";
 function ipcSource(b, side){
   if(side && b["ipc_"+side]) return b["ipc_"+side];
   if(b.ipc) return b.ipc;
@@ -1982,68 +1984,252 @@ function ipcRebin(pay, W){
   for(var i=0;i<n;i++){ var lo=i*W, hi=Math.min(vf,(i+1)*W), w=hi-lo; xs.push(lo+w/2); ys.push(c[i]/w); }
   return {xs:xs, ys:ys};
 }
-function ipcSvg(pay, W, hidden){
-  // Shared SVG for the instruction-vs-IPC chart (Kernel Lab + TileLang drawer).
-  var ROW_H=16, GUT=128, DENS_W=56, PLOT_W=720, TOP=8, IPC_H=118, GAP=20, XLABEL_H=28, RIGHT=10;
-  var PLOT_L = GUT + DENS_W;
-  var rows = pay.rows || [];
-  var n = rows.length;
-  var vf = pay.vf;
+function ipcClassify(op){
+  var o = (op||"").toUpperCase();
+  if(/^(SIMT_F|RV_VDIV|RV_VMUL|RV_VMAX|RV_VMIN|RV_VADD|RV_VSUB|RV_VABS|RV_VEXP|RV_VLN|RV_VSQRT|RV_VREC|RV_VCVT|RV_VAND|RV_VOR|RV_VXOR|RV_VSHL|RV_VSHR|RV_VCMP|RV_VSEL)/.test(o)) return "compute";
+  if(/^(RV_VLD|RV_VST|RV_VLDI|RV_VSTI|SIMT_LDS|SIMT_STS)/.test(o)) return "loadstore";
+  return "addrctrl";
+}
+function ipcIsAddress(op){
+  var o = (op||"").toUpperCase();
+  return /^(SIMT_IADD_I|SIMT_S2R|SIMT_LEA|SIMT_SHFI|SIMT_END|MOV_|ADD_|SHL|SHR|SET_FLAG|WAIT_FLAG|NOP|LDP_|LD_|INSERT_|DC_|SBITSET|MADD|END$)/.test(o);
+}
+function ipcLayout(pay, state){
+  var rows = (pay.rows||[]).slice();
+  rows.forEach(function(r){ r.cls = ipcClassify(r.op); });
+  var clsOrder = ["compute","loadstore","addrctrl"];
+  var clsName = {compute:"compute", loadstore:"load / store", addrctrl:"address / control"};
+  var items = [];
+  function pushRow(r){ items.push({type:"row", r:r, collapsed: !!state.collapsed[r.cls]}); }
+  if(state.grouped){
+    clsOrder.forEach(function(cls){
+      var grp = rows.filter(function(r){ return r.cls===cls; });
+      if(!grp.length) return;
+      items.push({type:"header", cls:cls, name:clsName[cls], n:grp.length, collapsed: !!state.collapsed[cls]});
+      grp.forEach(pushRow);
+    });
+  } else {
+    rows.forEach(pushRow);
+  }
+  return items;
+}
+function ipcKpi(pay, W, line){
+  var peak = 0; for(var i=0;i<line.ys.length;i++){ if(line.ys[i]>peak) peak = line.ys[i]; }
+  function it(b,v,t){ return '<span class="ipc-kpi-item" title="'+t+'"><b>'+b+'</b> '+v+'</span>'; }
+  return '<div class="ipc-kpi">'+
+    it("VF", pay.vf+"c", "VF window width (ticks)")+
+    it("issues", pay.issues, "issues inside the window (VF excluded)")+
+    it("IPC", pay.ipc.toFixed(2), "issues ÷ VF")+
+    it("peak", peak.toFixed(2)+"/bin", "highest per-bin IPC")+
+    it("bins", W, "bin width in ticks")+
+  '</div>';
+}
+function ipcLegend(){
+  return '<div class="ipc-legend">'+
+    '<span class="ipc-leg-swatch ipc-leg-mark"></span> one issue · '+
+    '<span class="ipc-leg-swatch ipc-leg-dens"></span> row density · '+
+    '<span class="ipc-leg-swatch ipc-leg-avg"></span> avg IPC · '+
+    '<span class="ipc-leg-dot green"></span> above avg · <span class="ipc-leg-dot red"></span> below avg · '+
+    '<span class="muted small">click a row (or group header) to hide/show</span></div>';
+}
+function ipcControls(state){
+  var presets = [5,10,20,40,80];
+  var h = '<span class="ipc-picker">bin '+
+    presets.map(function(p){ return '<button class="ipc-btn'+(state.W===p?' active':'')+'" data-preset="'+p+'" title="bin width in ticks — smoother ↔ sharper; scalar IPC unchanged">'+p+'</button>'; }).join('')+
+    '<input type="number" class="ipc-bin" min="1" step="1" value="'+state.W+'" title="bin width in ticks" aria-label="bin width in ticks">'+
+  '</span>';
+  h += '<span class="ipc-picker">'+
+    '<button class="ipc-btn" data-act="hideaddr" title="hide address/control math (SIMT_IADD_I, S2R, LEA, scalar MOV…)">hide addr</button>'+
+    '<button class="ipc-btn'+(state.grouped?' active':'')+'" data-act="group" title="group rows by class (compute / load-store / address-control)">group</button>'+
+    '<button class="ipc-btn" data-act="reset" title="restore hidden rows, grouping and default bin width">reset</button>'+
+  '</span>';
+  h += '<span class="ipc-picker">'+
+    '<button class="ipc-btn" data-act="dl-svg" title="download the chart as SVG">⤓ SVG</button>'+
+    '<button class="ipc-btn" data-act="dl-png" title="download the chart as PNG (2×)">⤓ PNG</button>'+
+  '</span>';
+  return h;
+}
+function ipcDownload(host, fmt){
+  var svg = host.querySelector("svg.ipc-svg");
+  if(!svg) return;
+  var w = svg.viewBox.baseVal.width, h = svg.viewBox.baseVal.height;
+  var clone = svg.cloneNode(true);
+  clone.setAttribute("width", w); clone.setAttribute("height", h);
+  clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
+  var data = new XMLSerializer().serializeToString(clone);
+  var blob = new Blob([data], {type:"image/svg+xml"});
+  var fname = "ipc-"+(host.getAttribute("data-ipc-name")||"chart");
+  var u = URL.createObjectURL(blob);
+  if(fmt==="svg"){
+    var a = document.createElement("a");
+    a.href = u; a.download = fname+".svg"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(u); }, 2000);
+  } else {
+    var img = new Image();
+    img.onload = function(){
+      var cv = document.createElement("canvas");
+      cv.width = w*2; cv.height = h*2;
+      var cx = cv.getContext("2d");
+      var bg = (getComputedStyle(document.body).getPropertyValue("--surface-0")||"#ffffff").trim();
+      cx.fillStyle = bg; cx.fillRect(0,0,cv.width,cv.height);
+      cx.drawImage(img, 0, 0, w*2, h*2);
+      URL.revokeObjectURL(u);
+      var a = document.createElement("a");
+      a.href = cv.toDataURL("image/png"); a.download = fname+".png";
+      document.body.appendChild(a); a.click(); a.remove();
+    };
+    img.src = u;
+  }
+}
+function ipcRender(host, pay, state, redraw){
+  if(!host) return;
+  if(!state.W) state.W = pay.bin || 20;
+  if(!state.hidden) state.hidden = {};
+  if(!state.collapsed) state.collapsed = {};
+  if(state.grouped === undefined) state.grouped = false;
+  var W = state.W;
   var line = ipcRebin(pay, W);
-  var maxN = 0;
-  for(var i=0;i<n;i++){ if(rows[i].n > maxN) maxN = rows[i].n; }
+  var items = ipcLayout(pay, state);
+  var maxRowN = 0; (pay.rows||[]).forEach(function(r){ if(r.n>maxRowN) maxRowN=r.n; });
+  var ROW_H = 16, HDR_H = 18, TOP = 6, GAP = 18, IPC_H = 118, XLABEL_H = 28;
+  var PLOT_L = 40, PLOT_W = 760, RIGHT = 8;
+  var vf = pay.vf;
+  var y = TOP;
+  items.forEach(function(it){ it.h = it.type==="header" ? HDR_H : ROW_H; it.y = y; it.cy = y + it.h/2; y += it.h; });
+  var rowsH = y - TOP;
+  var iy0 = TOP + rowsH + GAP, iy1 = iy0 + IPC_H;
+  var H_svg = TOP + rowsH + GAP + IPC_H + XLABEL_H;
   var W_svg = PLOT_L + PLOT_W + RIGHT;
-  var H_svg = TOP + n*ROW_H + GAP + IPC_H + XLABEL_H;
   var R = function(v){ return Math.round(v*100)/100; };
   var sx = function(t){ return PLOT_L + t * PLOT_W / vf; };
-  var p = [];
-  for(var i=0;i<n;i++){
-    var r = rows[i];
-    var y0 = TOP + i*ROW_H, cy = y0 + ROW_H/2;
-    var hid = hidden && hidden[r.op];
-    var col = IPC_COLORS[i % IPC_COLORS.length];
-    p.push('<rect class="ipc-row" data-op="'+esc(r.op)+'" x="0" y="'+R(y0)+'" width="'+W_svg+'" height="'+ROW_H+'" fill="'+(i%2===0?IPC_BAND_O:IPC_BAND_E)+'" fill-opacity="'+(hid?0.5:1)+'"/>');
-    var lbl = r.label.length > 18 ? r.label.slice(0,17)+'…' : r.label;
-    p.push('<text class="ipc-rowlbl" data-op="'+esc(r.op)+'" x="8" y="'+R(cy+3.5)+'" font-size="10" fill="'+(hid?'#8392a6':IPC_LABEL)+'"'+(hid?' style="text-decoration:line-through"':'')+'>'+esc(lbl)+'</text>');
-    var cw = 22 + String(r.n).length*5.5, cxl = GUT - cw - 6;
-    p.push('<rect x="'+R(cxl)+'" y="'+R(cy-6.5)+'" width="'+R(cw)+'" height="13" rx="6.5" fill="rgba(127,127,127,0.14)"/>');
-    p.push('<text x="'+R(cxl+cw/2)+'" y="'+R(cy+3)+'" text-anchor="middle" font-size="8.5" fill="'+IPC_COUNT+'">×'+r.n+'</text>');
-    var densW = DENS_W - 16, dx = GUT + 6;
-    p.push('<rect x="'+R(dx)+'" y="'+R(cy-2)+'" width="'+R(densW)+'" height="4" rx="2" fill="rgba(127,127,127,0.22)"/>');
-    if(!hid && maxN){ p.push('<rect x="'+R(dx)+'" y="'+R(cy-2)+'" width="'+R(Math.max(2, densW*r.n/maxN))+'" height="4" rx="2" fill="'+col+'" fill-opacity="0.75"/>'); }
-    if(!hid){ var tks = r.ticks||[]; for(var j=0;j<tks.length;j++) p.push('<line x1="'+R(sx(tks[j]))+'" y1="'+R(cy-4.5)+'" x2="'+R(sx(tks[j]))+'" y2="'+R(cy+4.5)+'" stroke="'+col+'" stroke-width="0.7"/>'); }
-  }
-  var iy0 = TOP + n*ROW_H + GAP, iy1 = iy0 + IPC_H;
   var maxY = Math.max(4, (line.ys.length ? Math.max.apply(null, line.ys) : 0) + 0.4);
-  var syy = function(y){ return iy1 - (y/maxY)*IPC_H; };
-  var tf = function(y){ return (y === 0) ? "0" : (y >= 10 ? y.toFixed(0) : y.toFixed(1)); };
+  var syy = function(yv){ return iy1 - (yv/maxY)*IPC_H; };
+
+  // --- label column (HTML) ---
+  var lbl = '';
+  var ri = 0;
+  items.forEach(function(it){
+    if(it.type==="header"){
+      lbl += '<div class="ipc-lrow ipc-lhdr'+(it.collapsed?' collapsed':'')+'" data-cls="'+it.cls+'" style="height:'+it.h+'px" title="click to collapse/expand">'+
+        '<span class="ipc-hdr-arrow">'+(it.collapsed?'▸':'▾')+'</span>'+
+        '<span class="ipc-lname">'+esc(it.name)+'</span>'+
+        '<span class="ipc-lcount">'+it.n+' ops</span></div>';
+      return;
+    }
+    var r = it.r;
+    var hid = !!state.hidden[r.op] || it.collapsed;
+    var dens = maxRowN ? Math.round(r.n/maxRowN*100) : 0;
+    lbl += '<div class="ipc-lrow'+(hid?' dimmed':'')+'" data-op="'+esc(r.op)+'" style="height:'+it.h+'px" title="'+esc(r.op)+' — '+r.n+' issues ('+Math.round(r.n/pay.issues*100)+'% of window) · click to hide/show">'+
+      '<span class="ipc-eye">'+(hid?'🙈':'👁')+'</span>'+
+      '<span class="ipc-lname">'+esc(r.label)+'</span>'+
+      '<span class="ipc-dens"><i style="width:'+dens+'%;background:'+r.color+'"></i></span>'+
+      '<span class="ipc-lcount">×'+r.n+'</span></div>';
+    ri++;
+  });
+
+  // --- svg plot column ---
+  var p = [];
+  var band = 0;
+  items.forEach(function(it){
+    if(it.type==="header"){
+      p.push('<rect x="0" y="'+R(it.y)+'" width="'+W_svg+'" height="'+it.h+'" fill="rgba(127,127,127,0.08)"/>');
+      return;
+    }
+    var r = it.r;
+    var hid = !!state.hidden[r.op] || it.collapsed;
+    var col = r.color;
+    p.push('<rect class="ipc-row" data-op="'+esc(r.op)+'" x="0" y="'+R(it.y)+'" width="'+W_svg+'" height="'+it.h+'" fill="'+(band%2===0?IPC_BAND_O:IPC_BAND_E)+'" fill-opacity="'+(hid?0.5:1)+'"/>');
+    if(!hid){ var tks = r.ticks||[]; for(var j=0;j<tks.length;j++) p.push('<line x1="'+R(sx(tks[j]))+'" y1="'+R(it.cy-4.5)+'" x2="'+R(sx(tks[j]))+'" y2="'+R(it.cy+4.5)+'" stroke="'+col+'" stroke-width="0.7"/>'); }
+    band++;
+  });
+  // IPC plot
+  var tf = function(yv){ return (yv===0) ? "0" : (yv>=10 ? yv.toFixed(0) : yv.toFixed(1)); };
   p.push('<line x1="'+PLOT_L+'" y1="'+R(iy0)+'" x2="'+(PLOT_L+PLOT_W)+'" y2="'+R(iy0)+'" stroke="'+IPC_BASE+'" stroke-width="1"/>');
   [0, maxY/2, maxY].forEach(function(yv){
     var yy = syy(yv);
-    if(yv > 0.0001) p.push('<line x1="'+PLOT_L+'" y1="'+R(yy)+'" x2="'+(PLOT_L+PLOT_W)+'" y2="'+R(yy)+'" stroke="'+IPC_GRID+'" stroke-width="0.7"/>');
+    if(yv>0.0001) p.push('<line x1="'+PLOT_L+'" y1="'+R(yy)+'" x2="'+(PLOT_L+PLOT_W)+'" y2="'+R(yy)+'" stroke="'+IPC_GRID+'" stroke-width="0.7"/>');
     p.push('<text x="'+(PLOT_L-6)+'" y="'+R(yy+3)+'" text-anchor="end" font-size="8" fill="'+IPC_COUNT+'">'+tf(yv)+'</text>');
   });
-  p.push('<text x="8" y="'+R(iy0-4)+'" font-size="9" fill="'+IPC_COUNT+'">IPC</text>');
+  p.push('<text x="'+(PLOT_L-6)+'" y="'+R(iy0-5)+'" text-anchor="end" font-size="9" fill="'+IPC_COUNT+'">IPC</text>');
   if(line.xs.length){
-    var px = line.xs, py = line.ys;
+    var px=line.xs, py=line.ys, avg=pay.ipc;
     var dFill = 'M'+R(sx(px[0]))+' '+R(iy0);
     for(var k=0;k<px.length;k++) dFill += ' L'+R(sx(px[k]))+' '+R(syy(py[k]));
     dFill += ' L'+R(sx(px[px.length-1]))+' '+R(iy0)+' Z';
-    p.push('<path d="'+dFill+'" fill="'+IPC_LINE+'" fill-opacity="0.16" stroke="none"/>');
+    p.push('<path d="'+dFill+'" fill="'+IPC_LINE+'" fill-opacity="0.15" stroke="none"/>');
+    for(var m=0;m<px.length;m++) p.push('<circle cx="'+R(sx(px[m]))+'" cy="'+R(syy(py[m]))+'" r="1.7" fill="'+(py[m]>=avg?IPC_GOOD:IPC_BAD)+'" fill-opacity="0.9"/>');
     var dLine = '';
     for(var k2=0;k2<px.length;k2++) dLine += (k2?'L':'M')+R(sx(px[k2]))+' '+R(syy(py[k2]));
     p.push('<path d="'+dLine+'" fill="none" stroke="'+IPC_LINE+'" stroke-width="1.15"/>');
   }
   p.push('<line x1="'+PLOT_L+'" y1="'+R(syy(pay.ipc))+'" x2="'+(PLOT_L+PLOT_W)+'" y2="'+R(syy(pay.ipc))+'" stroke="'+IPC_LINE+'" stroke-width="1" stroke-dasharray="4 3" stroke-opacity="0.5"/>');
   p.push('<text x="'+(PLOT_L+PLOT_W-4)+'" y="'+R(syy(pay.ipc)-3)+'" text-anchor="end" font-size="8" fill="'+IPC_COUNT+'">avg '+pay.ipc.toFixed(2)+'</text>');
-  [0, 0.25, 0.5, 0.75, 1].forEach(function(f){
+  [0,0.25,0.5,0.75,1].forEach(function(f){
     var xx = sx(vf*f);
-    var lbl = f===0 ? "0" : (f===1 ? String(vf) : Math.round(f*100)+"%");
+    var lbl = f===0?"0":(f===1?String(vf):Math.round(f*100)+"%");
     p.push('<line x1="'+R(xx)+'" y1="'+R(iy1)+'" x2="'+R(xx)+'" y2="'+R(iy1+3)+'" stroke="'+IPC_BASE+'" stroke-width="0.7"/>');
     p.push('<text x="'+R(xx)+'" y="'+R(iy1+11)+'" text-anchor="middle" font-size="8" fill="'+IPC_COUNT+'">'+lbl+'</text>');
   });
   p.push('<text x="'+(PLOT_L+PLOT_W/2)+'" y="'+R(iy1+23)+'" text-anchor="middle" font-size="8.5" fill="'+IPC_COUNT+'">tick inside the VF window</text>');
-  return '<div class="ipc-svg-wrap"><svg class="ipc-svg" viewBox="0 0 '+W_svg+' '+H_svg+'" width="100%" role="img" xmlns="http://www.w3.org/2000/svg">'+p.join('')+'</svg></div>';
+  p.push('<rect class="ipc-cross" x="'+PLOT_L+'" y="'+iy0+'" width="'+PLOT_W+'" height="'+IPC_H+'" fill="transparent"/>');
+
+  host.innerHTML =
+    ipcKpi(pay, W, line) +
+    '<div class="ipc-toolbar">'+ipcControls(state)+'</div>' +
+    '<div class="ipc-split">'+
+      '<div class="ipc-labels"><div class="ipc-lcol" style="padding-top:'+TOP+'px">'+lbl+'</div></div>'+
+      '<div class="ipc-scroll"><svg class="ipc-svg" viewBox="0 0 '+W_svg+' '+H_svg+'" width="100%" role="img" aria-label="instruction issue rows and IPC line" xmlns="http://www.w3.org/2000/svg">'+p.join('')+'</svg></div>'+
+    '</div>'+
+    ipcLegend();
+
+  // --- wiring ---
+  host.querySelectorAll(".ipc-btn[data-preset]").forEach(function(b){
+    b.addEventListener("click", function(){ state.W = parseInt(b.getAttribute("data-preset"),10); redraw(); });
+  });
+  var binFree = host.querySelector("input.ipc-bin");
+  if(binFree) binFree.addEventListener("change", function(){ var v=parseInt(binFree.value,10); state.W = (v>=1)?v:20; redraw(); });
+  host.querySelectorAll(".ipc-btn[data-act]").forEach(function(b){
+    b.addEventListener("click", function(){
+      var act = b.getAttribute("data-act");
+      if(act==="hideaddr"){ ipcLayout(pay,{grouped:false,collapsed:{}}).forEach(function(it){ if(it.type==="row" && ipcIsAddress(it.r.op)) state.hidden[it.r.op]=1; }); }
+      else if(act==="group"){ state.grouped = !state.grouped; }
+      else if(act==="reset"){ state.hidden={}; state.grouped=false; state.collapsed={}; state.W = (pay.bin||20); }
+      else if(act==="dl-svg"){ ipcDownload(host, "svg"); return; }
+      else if(act==="dl-png"){ ipcDownload(host, "png"); return; }
+      redraw();
+    });
+  });
+  host.querySelectorAll(".ipc-lrow[data-op]").forEach(function(row){
+    row.addEventListener("click", function(){
+      var op = row.getAttribute("data-op");
+      if(state.hidden[op]) delete state.hidden[op]; else state.hidden[op]=1;
+      redraw();
+    });
+  });
+  host.querySelectorAll(".ipc-lrow.ipc-lhdr").forEach(function(hdr){
+    hdr.addEventListener("click", function(){
+      var cls = hdr.getAttribute("data-cls");
+      if(state.collapsed[cls]) delete state.collapsed[cls]; else state.collapsed[cls]=1;
+      redraw();
+    });
+  });
+  var cross = host.querySelector(".ipc-cross");
+  if(cross){
+    var tip = host.querySelector(".ipc-tip");
+    if(!tip){ tip = document.createElement("div"); tip.className = "ipc-tip"; host.appendChild(tip); }
+    cross.addEventListener("mousemove", function(e){
+      var rect = cross.getBoundingClientRect();
+      var fx = (e.clientX - rect.left) / rect.width;
+      var fy = (rect.bottom - e.clientY) / rect.height;
+      var tick = Math.max(0, Math.min(vf, Math.round(fx * vf)));
+      var ip = Math.max(0, fy * maxY);
+      tip.textContent = "tick "+tick+" · IPC "+ip.toFixed(2);
+      tip.style.left = (e.clientX + 12) + "px";
+      tip.style.top = (e.clientY - 10) + "px";
+      tip.classList.add("show");
+    });
+    cross.addEventListener("mouseleave", function(){ tip.classList.remove("show"); });
+  }
 }
 function renderExIpc(b){
   var host = el("explorer-ipc");
@@ -2060,40 +2246,27 @@ function renderExIpc(b){
     host.innerHTML = '<div class="ex-ov-card"><div class="ex-ov-title">IPC timeline</div><div class="muted small">No instruction/issue trace beside this bundle — no <code>instr.bin</code> or <code>instr_popped_log.dump</code> + <code>instr_log.dump</code> pair was captured, so no VF window could be computed.</div></div>';
     return;
   }
-  if(kindNames.indexOf(EX_IPC.kind) < 0) EX_IPC.kind = kindNames[0];
-  var pay = src[EX_IPC.kind];
-  if(!EX_IPC.bin) EX_IPC.bin = pay.bin || 20;
-  var W = EX_IPC.bin;
-  var vf = pay.vf;
-
-  var tb = '<div class="ipc-toolbar">'+
-    '<span class="ipc-scalar">IPC <b>'+pay.ipc.toFixed(2)+'</b><span class="muted small"> = '+pay.issues+' issues ÷ '+vf+' ticks</span></span>';
-  if(sideNames.length>1){
-    tb += '<span class="ipc-picker">'+sideNames.map(function(s){ return '<button class="ipc-btn'+(EX_IPC.side===s?' active':'')+'" data-side="'+s+'">'+s.toUpperCase()+'</button>'; }).join('')+'</span>';
-  }
-  if(kindNames.length>1){
-    tb += '<span class="ipc-picker">'+kindNames.map(function(k){ return '<button class="ipc-btn'+(EX_IPC.kind===k?' active':'')+'" data-kind="'+k+'">'+k.toUpperCase()+'</button>'; }).join('')+'</span>';
-  }
-  tb += '<label class="ipc-bin">bin <input type="number" id="ipc-bin" min="1" step="1" value="'+W+'"> ticks</label></div>';
-
-  var hidden = EX_IPC.hidden || {};
-  host.innerHTML = tb + ipcSvg(pay, W, hidden);
-
-  host.querySelectorAll(".ipc-btn[data-side]").forEach(function(btn){
-    btn.addEventListener("click", function(){ EX_IPC.side = btn.getAttribute("data-side"); renderExIpc(b); });
+  var kinds = kindNames;
+  var head = '<div class="ipc-toolbar"><span class="ipc-scalar">'+
+    (sideNames.length>1 ? '<span class="ipc-picker">side '+sideNames.map(function(s){ return '<button class="ipc-btn'+(EX_IPC.side===s?' active':'')+'" data-ipc-side="'+s+'">'+s.toUpperCase()+'</button>'; }).join('')+'</span>' : '')+
+    '<span class="muted small">'+(kinds.length>1?'SIMD + SIMT side by side':'issue rows + IPC line')+'</span></div>';
+  host.innerHTML = head;
+  kinds.forEach(function(kind){
+    var p = src[kind];
+    var div = document.createElement("div");
+    div.className = "ipc-panel";
+    if(kinds.length>1){
+      div.innerHTML = '<div class="ipc-kind-title">'+kind.toUpperCase()+'</div>';
+    }
+    var sub = document.createElement("div");
+    sub.className = "ipc-host";
+    sub.setAttribute("data-ipc-name", kind);
+    div.appendChild(sub);
+    host.appendChild(div);
+    ipcRender(sub, p, EX_IPC, function(){ renderExIpc(b); });
   });
-  host.querySelectorAll(".ipc-btn[data-kind]").forEach(function(btn){
-    btn.addEventListener("click", function(){ EX_IPC.kind = btn.getAttribute("data-kind"); renderExIpc(b); });
-  });
-  var bin = el("ipc-bin");
-  if(bin) bin.addEventListener("change", function(){ var v = parseInt(bin.value,10); EX_IPC.bin = (v>=1)?v:20; renderExIpc(b); });
-  host.querySelectorAll(".ipc-row, .ipc-rowlbl").forEach(function(node){
-    node.style.cursor = "pointer";
-    node.addEventListener("click", function(){
-      var op = node.getAttribute("data-op");
-      if(EX_IPC.hidden[op]) delete EX_IPC.hidden[op]; else EX_IPC.hidden[op] = 1;
-      renderExIpc(b);
-    });
+  host.querySelectorAll(".ipc-btn[data-ipc-side]").forEach(function(btn){
+    btn.addEventListener("click", function(){ EX_IPC.side = btn.getAttribute("data-ipc-side"); renderExIpc(b); });
   });
 }
 // Extract syntax/compile error lines from a raw log blob (ECSs is noisy).
