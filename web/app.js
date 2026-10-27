@@ -2178,7 +2178,7 @@ function ipcRender(host, pay, state, redraw){
     '<div class="ipc-toolbar">'+ipcControls(state)+'</div>' +
     '<div class="ipc-split">'+
       '<div class="ipc-labels"><div class="ipc-lcol" style="padding-top:'+TOP+'px">'+lbl+'</div></div>'+
-      '<div class="ipc-scroll"><svg class="ipc-svg" viewBox="0 0 '+W_svg+' '+H_svg+'" width="100%" role="img" aria-label="instruction issue rows and IPC line" xmlns="http://www.w3.org/2000/svg">'+p.join('')+'</svg></div>'+
+      '<div class="ipc-scroll"><svg class="ipc-svg" viewBox="0 0 '+W_svg+' '+H_svg+'" width="100%" height="'+H_svg+'" preserveAspectRatio="none" role="img" aria-label="instruction issue rows and IPC line" xmlns="http://www.w3.org/2000/svg">'+p.join('')+'</svg></div>'+
     '</div>'+
     ipcLegend();
 
