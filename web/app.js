@@ -6631,6 +6631,109 @@ function loadWhlList(){
   }).catch(function(){ host.innerHTML='<p class="muted small">Failed to load whl list.</p>'; });
 }
 
+/* ---------------- DISASM (static SIMD vs SIMT) ---------------- */
+var DISASM_MANIFEST = null;
+function disasmClassOf(line){
+  // classify one disasm line for coloring. Returns 'simd'|'simt'|'scalar'|'label'|'comment'|''
+  if(/^\s*#/.test(line)) return 'comment';
+  if(/^[0-9a-fA-F]+\s+<.*>:$/.test(line)) return 'label';
+  var tag = /;\s*\[(SIMD|SIMT|SCALAR)\]\s*$/.exec(line);
+  if(tag) return tag[1].toLowerCase();
+  var m = /^\s*[0-9a-fA-F]+:\s+[0-9a-fA-F]+\s+(\S+)/.exec(line);
+  if(!m) return '';
+  var mn = m[1].toUpperCase();
+  if(/^(VAG|VLOOP|VADD|VSUB|VMUL|VDIV|VMAX|VMIN|VABS|VREC|VSQRT|VEXP|VLOG|VRELU|VSEL|VOR|VAND|VCMP|VCVT|VDUP|VMOV|VLD|VST|VSHL|VSHR|VRED|VSORT|VEXTRACT|VINSERT|VSLIDE|VSELR|VFIX|VROUND|VF\b|SEND$|PLT\.|PSET\.|SMOVI)/.test(mn)) return 'simd';
+  if(/^V/.test(mn)) return 'simd';
+  if(/MTE|_TO_UB|UB_TO_|PUSH_PB|POP_PB|MMAD|MATMUL|LDMATRIX|STMATRIX|FMAC|FIXP|MATRIX|^LDA|^STA/.test(mn)) return 'simt';
+  return 'scalar';
+}
+function disasmRenderCode(host, text){
+  host.innerHTML = text.split("\n").map(function(line){
+    var cls = disasmClassOf(line);
+    return '<div class="dl '+(cls||"")+'">'+esc(line||" ")+'</div>';
+  }).join("");
+}
+function disasmRenderSummary(k, entry, side){
+  var s = el("disasm-summary");
+  if(!s) return;
+  var d = entry ? entry[side] : null;
+  if(!d){ s.innerHTML=''; return; }
+  if(d.error){ s.innerHTML = '<span class="bad">'+esc(k)+' · '+(side==='cce'?'CCE':'DSL')+' — '+esc(d.error)+'</span>'; return; }
+  var c=d.counts||{};
+  var bars = ["SIMD","SIMT","SCALAR"].map(function(cls){
+    var n=c[cls]||0, pct=(d.total?Math.round(n*100/d.total):0);
+    return '<div class="disasm-bar" data-cls="'+cls.toLowerCase()+'">'+
+      '<span class="disasm-bar-lbl">'+cls+'</span>'+
+      '<span class="disasm-bar-fill" style="width:'+pct+'%"></span>'+
+      '<span class="disasm-bar-n">'+n+' ('+pct+'%)</span></div>';
+  }).join("");
+  s.innerHTML = '<div class="disasm-bars">'+bars+'</div>'+
+    '<div class="muted small">'+esc(d.so || "")+' · '+d.total+' instructions · llvm-objdump (CANN 9.3.0)</div>';
+}
+VIEWS.disasm = function(){
+  var sel = el("disasm-select");
+  var status = el("disasm-status");
+  var cur = function(){
+    return DISASM_MANIFEST ? DISASM_MANIFEST.kernels.filter(function(k){ return k.kernel===sel.value; })[0] : null;
+  };
+  var curSide = function(){
+    var r = document.querySelector('input[name="disasm-side"]:checked');
+    return r ? r.value : 'cce';
+  };
+  var refresh = function(){
+    if(!sel || !sel.value){ return; }
+    var k = cur();
+    var side = curSide();
+    if(!k){ return; }
+    var entry = k[side];
+    disasmRenderSummary(k.kernel, k, side);
+    var showTagged = el("disasm-show-tagged").checked;
+    el("disasm-full-host").classList.toggle("hidden", !showTagged);
+    if(!entry || entry.error){
+      status.textContent = entry ? entry.error : "no static disasm for this side";
+      el("disasm-simd").innerHTML=""; el("disasm-simt").innerHTML=""; el("disasm-tagged").innerHTML="";
+      return;
+    }
+    status.textContent = "";
+    var base = "disasm/"+encodeURIComponent(k.kernel)+"/";
+    var f = entry.files||{};
+    var load = function(rel, host){
+      if(!rel || !host){ host.innerHTML=""; return; }
+      fetch(base+rel).then(function(r){ if(!r.ok) throw 0; return r.text(); }).then(function(t){
+        disasmRenderCode(host, t);
+      }).catch(function(){ host.innerHTML='<div class="muted small">n/a</div>'; });
+    };
+    load(f.simd, el("disasm-simd"));
+    load(f.simt, el("disasm-simt"));
+    load(f.tagged, el("disasm-tagged"));
+  };
+  if(DISASM_MANIFEST){
+    var kernels = DISASM_MANIFEST.kernels.filter(function(k){ return k.cce || k.dsl; });
+    if(kernels.length===0){
+      sel.innerHTML = '<option value="">No disassembly yet — run run_cce.sh then build_dashboard.sh</option>';
+      status.textContent = "build_disasm.py found no .so files.";
+      return;
+    }
+    sel.innerHTML = kernels.map(function(k){
+      var has = (k.cce&&k.cce.total?("CCE "+(k.cce.total||"")):"") + (k.dsl&&k.dsl.total?(" · DSL "+k.dsl.total):"");
+      return '<option value="'+esc(k.kernel)+'">'+esc(k.kernel)+' ('+has+')</option>';
+    }).join("");
+    el("disasm-count").textContent = "("+kernels.length+" kernels)";
+    sel.onchange = refresh;
+    document.querySelectorAll('input[name="disasm-side"]').forEach(function(r){ r.onchange=refresh; });
+    el("disasm-show-tagged").onchange = refresh;
+    refresh();
+  } else {
+    fetch("disasm/manifest.json").then(function(r){ if(!r.ok) throw 0; return r.json(); }).then(function(m){
+      DISASM_MANIFEST = m || {kernels:[]};
+      VIEWS.disasm();
+    }).catch(function(){
+      sel.innerHTML = '<option value="">disasm/manifest.json missing — run build_dashboard.sh</option>';
+      status.textContent = "Disasm layer not built yet.";
+    });
+  }
+};
+
 /* ---------------- boot ---------------- */
 initVersionSelector();
 startRunTracker();

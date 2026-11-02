@@ -430,6 +430,17 @@ for i in "${!CASES[@]}"; do
     FAIL=$((FAIL+1)); FAILED_CASES+=("$kernel")
     MAN_STATUS="FAIL (exit=${rc})"; MAN_ERR="${err:0:120}"
   fi
+  # ── Capture any compiled kernel .so for static disassembly (Disasm tab) ──
+  # ptodsl/ptoas may JIT the device fat-object into the case dir or a temp dir;
+  # capture what we can so build_disasm.py can run llvm-objdump over it.
+  if [[ -d "$case_log_dir" ]]; then
+    so_stage="${REPO_ROOT}/logs/a6_vmi_so/${kernel}"
+    while IFS= read -r so; do
+      mkdir -p "$so_stage"
+      cp -f "$so" "$so_stage/" 2>/dev/null
+    done < <(find "$case_log_dir" -name '*.so' -type f 2>/dev/null)
+  fi
+
   printf '%s\t%s\t%s\t%d\t%d\t%s\n' "$kernel" "$case_name" "$MAN_STATUS" "$dump_size" "$case_elapsed" "$MAN_ERR" >> "$MANIFEST"
 done
 

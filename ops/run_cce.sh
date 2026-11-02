@@ -296,6 +296,19 @@ for i in "${!CASES[@]}"; do
     FAIL=$((FAIL+1)); FAILED_CASES+=("$case_id")
   fi
 
+  # ── Capture the compiled kernel .so for static disassembly (Disasm tab) ──
+  # The host fat-object carries the embedded device ELF (.aicore_binary);
+  # build_disasm.py later runs llvm-objdump over it. Capture BEFORE we rm the
+  # build dir so a re-run of the full sim is never needed just to disassemble.
+  if [[ -d "$build_dir" ]]; then
+    so_stage="${REPO_ROOT}/logs/a6_cce_so/${kernel_name}"
+    mkdir -p "$so_stage"
+    while IFS= read -r so; do
+      cp -f "$so" "$so_stage/" 2>/dev/null && \
+        info "captured $(basename "$so") → a6_cce_so/${kernel_name}/"
+    done < <(find "$build_dir" -name '*.so' -type f 2>/dev/null)
+  fi
+
   rm -rf "$kdir/build"
 done
 

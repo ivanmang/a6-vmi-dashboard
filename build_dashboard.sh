@@ -462,6 +462,17 @@ else
   warn "build_explorer.sh not found — Kernel Lab will be empty"
 fi
 
+# ── Step 6.6: Build static disassembly (SIMD vs SIMT) ──────────────────────
+hdr "Step 6.6: Build static disassembly (SIMD vs SIMT)"
+# disasm.py shells llvm-objdump/llvm-objcopy from the CANN 9.3.0 package; the
+# .so files are staged by run_cce.sh / run_vmi.sh into logs/a6_{cce,vmi}_so/.
+if [[ -f "$SCRIPT_DIR/scripts/build_disasm.py" ]]; then
+  rm -rf "$DASH/web/disasm"; mkdir -p "$DASH/web/disasm"
+  PTO_VMI_REPO="$REPO" python3 "$SCRIPT_DIR/scripts/build_disasm.py" 2>&1 | tail -40
+else
+  warn "build_disasm.py not found — Disasm tab will be empty"
+fi
+
 # ── Step 7: wIPC (removed for A6 — A5-only model, wipc_all.json is shimmed in app.js) ──
 
 # ── Summary ────────────────────────────────────────────────────────────────

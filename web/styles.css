@@ -1278,6 +1278,39 @@ a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,su
 .cmp-ov-bars .pt-label{cursor:pointer}
 .cmp-ov-bars .pt-label text{transition:fill .1s}
 .cmp-ov-bars .pt-label:hover text{fill:var(--accent);text-decoration:underline}
+
+/* ── Disasm tab (static SIMD vs SIMT) ───────────────────────────────────── */
+.tag-simd, .tag-simt, .tag-scalar{font-weight:700;padding:0 .4em;border-radius:4px}
+.tag-simd{color:#1d4ed8;background:rgba(37,99,235,.10)}
+.tag-simt{color:#6d28d9;background:rgba(124,58,237,.10)}
+.tag-scalar{color:#475569;background:rgba(100,116,139,.12)}
+.disasm-side-pick{margin-left:6px;display:inline-flex;gap:10px;align-items:center;font-size:12.5px;color:var(--muted)}
+.disasm-side-pick label{cursor:pointer;display:inline-flex;gap:4px;align-items:center}
+.disasm-toggle-lbl{font-size:12.5px;color:var(--muted);display:inline-flex;gap:5px;align-items:center;cursor:pointer}
+.disasm-summary{margin:4px 0 12px}
+.disasm-bars{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px}
+.disasm-bar{display:grid;grid-template-columns:54px 140px auto;gap:8px;align-items:center;font-size:12px}
+.disasm-bar-lbl{font-weight:700;color:var(--muted-strong);text-transform:uppercase;font-size:10.5px;letter-spacing:.5px}
+.disasm-bar-fill{display:block;height:10px;border-radius:5px;background:#cbd5e1;min-width:2px}
+.disasm-bar[data-cls=simd] .disasm-bar-fill{background:linear-gradient(90deg,#3b82f6,#2563eb)}
+.disasm-bar[data-cls=simt] .disasm-bar-fill{background:linear-gradient(90deg,#a78bfa,#7c3aed)}
+.disasm-bar[data-cls=scalar] .disasm-bar-fill{background:linear-gradient(90deg,#94a3b8,#64748b)}
+.disasm-bar-n{color:var(--muted);font-variant-numeric:tabular-nums}
+.disasm-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px}
+.disasm-grid.hidden{display:none}
+.disasm-col h3{margin:0 0 6px;font-size:13px;color:var(--heading);font-weight:600}
+.disasm-col.full{grid-column:1 / -1}
+.code-scroll{background:#fbfcfe;border:1px solid var(--border);border-radius:8px;padding:8px 0;max-height:72vh;overflow:auto}
+.disasm-code{font-family:var(--mono);font-size:11.5px;line-height:1.5;white-space:pre}
+.disasm-code .dl{padding:0 12px;border-left:2px solid transparent}
+.disasm-code .dl:hover{background:rgba(20,184,166,.06)}
+.disasm-code .dl.simd{color:#1d4ed8;border-left-color:#3b82f6}
+.disasm-code .dl.simt{color:#6d28d9;border-left-color:#a78bfa}
+.disasm-code .dl.scalar{color:#475569;border-left-color:#cbd5e1}
+.disasm-code .dl.label{color:#0f766e;font-weight:600;border-left-color:var(--accent);background:rgba(20,184,166,.07)}
+.disasm-code .dl.comment{color:#94a3b8;font-style:italic;border-left-color:transparent}
+@media (max-width:900px){.disasm-grid{grid-template-columns:1fr}.disasm-col.full{grid-column:auto}}
+
 /* ---- IPC timeline v2 (shared panel) ---- */
 .ipc-kpi{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
 .ipc-kpi-item{font-size:12px;font-family:var(--mono);color:var(--heading);background:var(--surface-0);border:1px solid var(--border);border-radius:6px;padding:3px 9px}

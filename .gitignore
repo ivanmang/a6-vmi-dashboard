@@ -4,6 +4,7 @@
 /data/
 /web/data.js
 /web/explorer/
+/web/disasm/
 /web/critical_path.json
 /web/wipc_all.json
 /web/theory_vs_actual.json

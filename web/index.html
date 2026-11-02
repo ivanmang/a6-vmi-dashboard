@@ -26,6 +26,7 @@
          no A6 equivalent yet, so disabled to keep A6 data clean -->
     <!-- <button class="tab" data-view="criticalpath">Cost Model</button> -->
     <button class="tab" data-view="explorer">Kernel Lab</button>
+    <button class="tab" data-view="disasm">Disasm</button>
     <!-- <button class="tab" data-view="versions">Versions</button> -->
     <!-- <button class="tab" data-view="coverage">Feature Coverage</button> -->
     <button class="tab" data-view="summary">Diagnosis</button>
@@ -853,6 +854,48 @@ aclrtResetDevice+aclFinalize → teardown</pre>
   </div>
   <div class="detail-drawer-body" id="detail-drawer-body"></div>
 </div>
+
+<template id="tpl-disasm">
+  <section class="view-section">
+    <div class="card">
+      <h2>Static Disassembly — SIMD vs SIMT <span class="count" id="disasm-count"></span></h2>
+      <p class="muted">
+        <code>llvm-objdump -d</code> of the compiled device ELF (<code>.aicore_binary</code> in the host <code>.so</code>),
+        split by pipeline so the two code paths can be read side by side:
+        <b class="tag-simd">SIMD</b> = vector unit (VADD/VMUL/VLD/VST/VCVT…, <code>.vector.thread</code>) ·
+        <b class="tag-simt">SIMT</b> = cube/MMAD + MTE data movement (MOV_*_TO_UB, PUSH_PB, SET_FLAGI.MTE*) ·
+        <b class="tag-scalar">SCALAR</b> = control thread (MOV/ADD/LD_IO/JUMPI…).
+      </p>
+      <div class="toolbar">
+        <select id="disasm-select"><option value="">Loading kernels…</option></select>
+        <span class="disasm-side-pick">
+          side:
+          <label><input type="radio" name="disasm-side" value="cce" checked> CCE</label>
+          <label><input type="radio" name="disasm-side" value="dsl"> DSL/VMI</label>
+        </span>
+        <label class="disasm-toggle-lbl"><input type="checkbox" id="disasm-show-tagged"> show full tagged listing</label>
+      </div>
+      <div id="disasm-summary" class="disasm-summary"></div>
+      <div id="disasm-status" class="muted small"></div>
+      <div class="disasm-grid">
+        <div class="disasm-col">
+          <h3>SIMD <span class="muted small">(vector unit)</span></h3>
+          <div id="disasm-simd" class="code-scroll disasm-code"></div>
+        </div>
+        <div class="disasm-col">
+          <h3>SIMT <span class="muted small">(matrix / MTE)</span></h3>
+          <div id="disasm-simt" class="code-scroll disasm-code"></div>
+        </div>
+      </div>
+      <div id="disasm-full-host" class="disasm-grid hidden">
+        <div class="disasm-col full">
+          <h3>Full listing <span class="muted small">(tagged, address order)</span></h3>
+          <div id="disasm-tagged" class="code-scroll disasm-code"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>
 
 <script src="data.js?v=20261025"></script>
 <script src="app.js?v=20261025"></script>

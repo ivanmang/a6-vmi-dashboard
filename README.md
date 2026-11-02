@@ -56,6 +56,31 @@ cd ~/a6-vmi-dashboard && bash build_dashboard.sh --serve
 - The dav_9201 camodel bugs (teardown + UB-parser) are sidestepped, not fixed;
   full diagnosis + reproduction in `docs/cann-a6-camodel-bug-report.md`.
 
+## Disasm tab (static SIMD vs SIMT)
+
+The **Disasm** tab disassembles the compiled device ELF with the CANN 9.3.0
+`llvm-objdump` and splits it by pipeline so the two code paths can be compared
+side by side in the browser:
+
+- **SIMD** — vector unit: `VADD/VMUL/VLD/VST/VCVT…` + `.vector.thread` code
+- **SIMT** — cube/MMAD + MTE data movement: `MMAD`, `MOV_*_TO_UB`, `PUSH_PB`,
+  `SET_FLAGI.MTE2/3…`
+- **SCALAR** — control thread: `MOV/ADD/LD_IO/ST_IO/JUMPI…`
+
+Pipeline wiring:
+
+1. `ops/run_cce.sh` (and `ops/run_vmi.sh`, best-effort) now capture the built
+   kernel `.so` into `~/pto-vmi/logs/a6_{cce,vmi}_so/<Kernel>/` **before** the
+   build dir is cleaned, so you never need to re-run the sim to disassemble.
+2. `build_dashboard.sh` runs `scripts/build_disasm.py` → `web/disasm/`
+   (`manifest.json` + per-kernel `cce`/`dsl` `.S` views).
+3. The tab reads `web/disasm/manifest.json` and renders the SIMD/SIMT lists
+   side by side (plus a full tagged listing), colored by pipeline.
+
+The classifier lives in `scripts/disasm.py` (mnemonic rules + V-register /
+`.vector.thread` heuristics, tunable via a rules JSON). LLVM tools are found at
+`~/cann93_tools/tools/bisheng_compiler/bin/` (override with `ASCEND_LLVM_BIN`).
+
 ## A5↔A6 compare tab
 
 The `A5↔A6` tab compares the **same kernel on two chips** — A5 (dav-c310, the
